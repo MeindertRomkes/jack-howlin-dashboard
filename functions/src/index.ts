@@ -4,6 +4,7 @@ import { onRequest } from 'firebase-functions/v2/https'
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import { fetchYouTubeComments } from './fetchComments'
 import { generateRepliesForComment } from './generateReplies'
+import { postScheduledContent } from './postScheduled'
 
 admin.initializeApp()
 
@@ -55,3 +56,39 @@ export const onNewComment = onDocumentCreated(
     await generateRepliesForComment(commentId)
   }
 )
+
+// Publish scheduled posts every 5 minutes
+export const postScheduledJob = onSchedule(
+  {
+    schedule: 'every 5 minutes',
+    region: 'europe-west1',
+    secrets: [
+      'YOUTUBE_CLIENT_ID',
+      'YOUTUBE_CLIENT_SECRET',
+      'YOUTUBE_REDIRECT_URI',
+      'YOUTUBE_REFRESH_TOKEN',
+    ],
+  },
+  async () => {
+    console.log('Running scheduled post publisher...')
+    await postScheduledContent()
+  }
+)
+
+// HTTP trigger for manual testing
+export const postScheduledHttp = onRequest(
+  {
+    region: 'europe-west1',
+    secrets: [
+      'YOUTUBE_CLIENT_ID',
+      'YOUTUBE_CLIENT_SECRET',
+      'YOUTUBE_REDIRECT_URI',
+      'YOUTUBE_REFRESH_TOKEN',
+    ],
+  },
+  async (req, res) => {
+    await postScheduledContent()
+    res.json({ success: true })
+  }
+)
+
