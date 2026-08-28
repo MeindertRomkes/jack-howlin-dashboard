@@ -1,8 +1,9 @@
-import { getFirestore, Timestamp } from 'firebase-admin/firestore'
+import { getDb } from './admin'
+import { Timestamp } from 'firebase-admin/firestore'
 import { google } from 'googleapis'
 
 export async function postScheduledContent(): Promise<void> {
-  const db = getFirestore()
+  const db = getDb()
   const now = Timestamp.now()
 
   // Find all posts that are scheduled and due

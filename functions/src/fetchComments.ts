@@ -1,9 +1,10 @@
-import { getFirestore, Timestamp } from 'firebase-admin/firestore'
+import { getDb } from './admin'
+import { Timestamp } from 'firebase-admin/firestore'
 import { google } from 'googleapis'
 import type { CommentDoc } from './types'
 
 export async function fetchYouTubeComments(): Promise<void> {
-  const db = getFirestore()
+  const db = getDb()
 
   const oauth2Client = new google.auth.OAuth2(
     process.env.YOUTUBE_CLIENT_ID,
