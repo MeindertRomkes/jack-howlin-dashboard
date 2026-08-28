@@ -41,3 +41,4 @@ next-env.d.ts
 # superpowers sdd
 .superpowers/
 
+firebase-debug.log
