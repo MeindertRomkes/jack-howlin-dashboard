@@ -1,0 +1,82 @@
+runConfig:
+  runtime: nodejs22
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyDqBbQX45dqRmBkmXKbQdGGpmui0LYYGHs
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: jack-howlin-dashboard.firebaseapp.com
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: jack-howlin-dashboard
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: jack-howlin-dashboard.firebasestorage.app
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "1077948920842"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:1077948920842:web:a092650c9ba70468445bf3
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: FIREBASE_ADMIN_PROJECT_ID
+    value: jack-howlin-dashboard
+    availability:
+      - RUNTIME
+
+  - variable: FIREBASE_ADMIN_CLIENT_EMAIL
+    value: firebase-adminsdk-fbsvc@jack-howlin-dashboard.iam.gserviceaccount.com
+    availability:
+      - RUNTIME
+
+  - variable: FIREBASE_ADMIN_PRIVATE_KEY
+    secret: ADMIN_PRIVATE_KEY
+    availability:
+      - RUNTIME
+
+  - variable: YOUTUBE_CLIENT_ID
+    value: 1077948920842-0h23d2gsde2pdsq93q32eb4sa7i5ekq0.apps.googleusercontent.com
+    availability:
+      - RUNTIME
+
+  - variable: YOUTUBE_CLIENT_SECRET
+    secret: YOUTUBE_CLIENT_SECRET
+    availability:
+      - RUNTIME
+
+  - variable: YOUTUBE_REDIRECT_URI
+    value: https://developers.google.com/oauthplayground
+    availability:
+      - RUNTIME
+
+  - variable: YOUTUBE_REFRESH_TOKEN
+    secret: YOUTUBE_REFRESH_TOKEN
+    availability:
+      - RUNTIME
+
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+    availability:
+      - RUNTIME
