@@ -3,6 +3,7 @@ import { Timestamp } from 'firebase-admin/firestore'
 import { postToYouTube } from './platforms/youtube'
 import { postToInstagram } from './platforms/instagram'
 import { postToTikTok } from './platforms/tiktok'
+import { postToFacebook } from './platforms/facebook'
 
 interface PlatformResult {
   status: 'posted' | 'failed'
@@ -81,6 +82,15 @@ export async function postScheduledContent(): Promise<void> {
           )
           platformResults.tiktok = { status: 'posted', postId: publishId }
           console.log(`✅ TikTok posted: ${publishId}`)
+
+        } else if (platform === 'facebook') {
+          const { postId } = await postToFacebook(
+            post.caption,
+            post.mediaUrl ?? null,
+            post.mediaType ?? null
+          )
+          platformResults.facebook = { status: 'posted', postId }
+          console.log(`✅ Facebook posted: ${postId}`)
 
         } else {
           console.warn(`Unknown platform: ${platform}`)

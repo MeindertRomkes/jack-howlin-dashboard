@@ -1,6 +1,6 @@
 import { Timestamp } from 'firebase/firestore'
 
-export type Platform = 'youtube' | 'instagram' | 'tiktok'
+export type Platform = 'youtube' | 'instagram' | 'tiktok' | 'facebook'
 export type CommentStatus = 'new' | 'replied' | 'ignored'
 export type PostStatus = 'draft' | 'scheduled' | 'posted' | 'failed'
 

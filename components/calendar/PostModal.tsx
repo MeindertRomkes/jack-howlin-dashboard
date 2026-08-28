@@ -13,6 +13,7 @@ const PLATFORMS: { key: Platform; label: string }[] = [
   { key: 'youtube', label: 'YouTube' },
   { key: 'instagram', label: 'Instagram' },
   { key: 'tiktok', label: 'TikTok' },
+  { key: 'facebook', label: 'Facebook' },
 ]
 
 export default function PostModal({ onClose, onSaved }: PostModalProps) {

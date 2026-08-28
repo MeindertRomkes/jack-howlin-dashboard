@@ -17,6 +17,8 @@ const POSTING_SECRETS = [
   'INSTAGRAM_ACCESS_TOKEN',
   'INSTAGRAM_USER_ID',
   'TIKTOK_ACCESS_TOKEN',
+  'FACEBOOK_PAGE_ACCESS_TOKEN',
+  'FACEBOOK_PAGE_ID',
 ]
 
 // Fetch YouTube comments every 30 minutes
