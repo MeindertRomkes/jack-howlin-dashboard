@@ -12,27 +12,24 @@ export async function POST(request: Request) {
     const decoded = await adminAuth.verifyIdToken(idToken)
 
     // Only allow the authorized email
-    const allowedEmail = process.env.ALLOWED_EMAIL || 'romkesmeindert@gmail.com'
-    if (decoded.email !== allowedEmail) {
-      return NextResponse.json({ error: 'Unauthorized email' }, { status: 403 })
+    if (decoded.email !== 'romkesmeindert@gmail.com') {
+      return NextResponse.json({ error: 'Unauthorized: wrong account' }, { status: 403 })
     }
 
-    // Create a session cookie (expires in 7 days)
-    const expiresIn = 60 * 60 * 24 * 7 * 1000
-    const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn })
-
-    const response = NextResponse.json({ success: true })
-    response.cookies.set('session', sessionCookie, {
-      maxAge: expiresIn / 1000,
+    // Set a simple session cookie with the uid
+    const response = NextResponse.json({ success: true, email: decoded.email })
+    response.cookies.set('session', decoded.uid, {
+      maxAge: 60 * 60 * 24 * 7, // 7 days
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       path: '/',
       sameSite: 'lax',
     })
     return response
   } catch (err) {
     console.error('Session creation error:', err)
-    return NextResponse.json({ error: 'Failed to create session' }, { status: 500 })
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 

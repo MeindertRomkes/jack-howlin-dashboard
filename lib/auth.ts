@@ -18,8 +18,8 @@ export async function signInWithGoogle(): Promise<void> {
     throw new Error(error || 'Failed to create session')
   }
 
-  // Redirect to dashboard after successful login
-  window.location.href = '/dashboard'
+  // Redirect to dashboard (root) after successful login
+  window.location.href = '/'
 }
 
 export async function signOut(): Promise<void> {
