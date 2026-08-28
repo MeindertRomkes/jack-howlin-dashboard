@@ -1,7 +1,9 @@
 import * as admin from 'firebase-admin'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { onRequest } from 'firebase-functions/v2/https'
+import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import { fetchYouTubeComments } from './fetchComments'
+import { generateRepliesForComment } from './generateReplies'
 
 admin.initializeApp()
 
@@ -37,5 +39,19 @@ export const fetchCommentsHttp = onRequest(
   async (req, res) => {
     await fetchYouTubeComments()
     res.json({ success: true })
+  }
+)
+
+// Generate AI replies when a new comment is created
+export const onNewComment = onDocumentCreated(
+  {
+    document: 'comments/{commentId}',
+    region: 'europe-west1',
+    secrets: ['GEMINI_API_KEY'],
+  },
+  async (event) => {
+    const commentId = event.params.commentId
+    console.log(`New comment created: ${commentId}`)
+    await generateRepliesForComment(commentId)
   }
 )
