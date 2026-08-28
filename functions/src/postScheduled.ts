@@ -1,9 +1,9 @@
-import * as admin from 'firebase-admin'
+import { getFirestore, Timestamp } from 'firebase-admin/firestore'
 import { google } from 'googleapis'
 
 export async function postScheduledContent(): Promise<void> {
-  const db = admin.firestore()
-  const now = admin.firestore.Timestamp.now()
+  const db = getFirestore()
+  const now = Timestamp.now()
 
   // Find all posts that are scheduled and due
   const snap = await db
@@ -43,7 +43,7 @@ export async function postScheduledContent(): Promise<void> {
       // For now, mark as posted to demonstrate the scheduler works
       await db.collection('posts').doc(docSnap.id).update({
         status: 'posted',
-        postedAt: admin.firestore.Timestamp.now(),
+        postedAt: Timestamp.now(),
       })
 
       console.log(`Post ${docSnap.id} marked as posted`)

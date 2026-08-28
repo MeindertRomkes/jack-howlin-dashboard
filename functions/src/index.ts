@@ -1,4 +1,4 @@
-import * as admin from 'firebase-admin'
+import { initializeApp, getApps } from 'firebase-admin/app'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { onRequest } from 'firebase-functions/v2/https'
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
@@ -6,7 +6,9 @@ import { fetchYouTubeComments } from './fetchComments'
 import { generateRepliesForComment } from './generateReplies'
 import { postScheduledContent } from './postScheduled'
 
-admin.initializeApp()
+if (!getApps().length) {
+  initializeApp()
+}
 
 // Fetch YouTube comments every 30 minutes
 export const fetchCommentsScheduled = onSchedule(
