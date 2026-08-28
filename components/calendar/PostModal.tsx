@@ -1,5 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
+import { storage } from '@/lib/firebase'
 import type { Platform } from '@/types'
 
 interface PostModalProps {
@@ -22,10 +24,57 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
   const [captionOptions, setCaptionOptions] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
+  // Media state
+  const [mediaFile, setMediaFile] = useState<File | null>(null)
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null)
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   function togglePlatform(p: Platform) {
     setPlatforms(prev =>
       prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
     )
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const type = file.type.startsWith('video/') ? 'video' : 'image'
+    setMediaType(type)
+    setMediaFile(file)
+
+    const url = URL.createObjectURL(file)
+    setMediaPreview(url)
+  }
+
+  function removeMedia() {
+    setMediaFile(null)
+    setMediaPreview(null)
+    setMediaType(null)
+    setUploadProgress(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function uploadMedia(file: File): Promise<string> {
+    const path = `posts/${Date.now()}-${file.name}`
+    const storageRef = ref(storage, path)
+    return new Promise((resolve, reject) => {
+      const task = uploadBytesResumable(storageRef, file)
+      task.on(
+        'state_changed',
+        snapshot => {
+          const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
+          setUploadProgress(pct)
+        },
+        reject,
+        async () => {
+          const url = await getDownloadURL(task.snapshot.ref)
+          resolve(url)
+        }
+      )
+    })
   }
 
   async function generateCaption() {
@@ -53,6 +102,12 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
     if (!caption.trim() || !scheduledAt || platforms.length === 0) return
     setSaving(true)
     try {
+      let mediaUrl: string | null = null
+
+      if (mediaFile) {
+        mediaUrl = await uploadMedia(mediaFile)
+      }
+
       await fetch('/api/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -60,8 +115,8 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
           platforms,
           caption,
           scheduledAt,
-          mediaUrl: null,
-          mediaType: null,
+          mediaUrl,
+          mediaType: mediaUrl ? mediaType : null,
         }),
       })
       onSaved()
@@ -69,12 +124,13 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
       // keep modal open on error
     } finally {
       setSaving(false)
+      setUploadProgress(null)
     }
   }
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-stone-900 border border-stone-700 w-full max-w-lg">
+      <div className="bg-stone-900 border border-stone-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-700">
           <h2 className="text-sm font-bold tracking-widest uppercase text-stone-100">
             New Post
@@ -108,6 +164,54 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Media Upload */}
+          <div>
+            <label className="text-xs tracking-widest uppercase text-stone-400 block mb-2">
+              Image / Video
+            </label>
+            {!mediaPreview ? (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full border border-dashed border-stone-600 hover:border-stone-400 py-8 text-stone-500 hover:text-stone-300 text-xs tracking-wider uppercase transition-colors"
+              >
+                + Select image or video
+              </button>
+            ) : (
+              <div className="relative">
+                {mediaType === 'image' ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={mediaPreview}
+                    alt="Preview"
+                    className="w-full max-h-48 object-cover"
+                  />
+                ) : (
+                  <video
+                    src={mediaPreview}
+                    className="w-full max-h-48 object-cover"
+                    controls
+                  />
+                )}
+                <button
+                  onClick={removeMedia}
+                  className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white w-6 h-6 flex items-center justify-center text-xs"
+                >
+                  ×
+                </button>
+                <p className="text-stone-500 text-xs mt-1">
+                  {mediaFile?.name} ({Math.round((mediaFile?.size ?? 0) / 1024)} KB)
+                </p>
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
           </div>
 
           {/* Caption AI Assist */}
@@ -169,6 +273,22 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
             />
           </div>
 
+          {/* Upload progress */}
+          {uploadProgress !== null && (
+            <div>
+              <div className="flex justify-between text-xs text-stone-400 mb-1">
+                <span>Uploading media...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-stone-700 h-1">
+                <div
+                  className="bg-amber-600 h-1 transition-all"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           <button
             onClick={handleSave}
             disabled={
@@ -179,7 +299,11 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
             }
             className="w-full bg-amber-700 hover:bg-amber-600 disabled:opacity-40 text-stone-100 py-3 text-xs tracking-widest uppercase transition-colors"
           >
-            {saving ? 'Saving...' : 'Schedule Post'}
+            {saving
+              ? uploadProgress !== null
+                ? `Uploading ${uploadProgress}%...`
+                : 'Saving...'
+              : 'Schedule Post'}
           </button>
         </div>
       </div>
