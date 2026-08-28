@@ -1,12 +1,19 @@
 import { getDb } from './admin'
 import { Timestamp } from 'firebase-admin/firestore'
-import { google } from 'googleapis'
+import { postToYouTube } from './platforms/youtube'
+import { postToInstagram } from './platforms/instagram'
+import { postToTikTok } from './platforms/tiktok'
+
+interface PlatformResult {
+  status: 'posted' | 'failed'
+  postId?: string
+  error?: string
+}
 
 export async function postScheduledContent(): Promise<void> {
   const db = getDb()
   const now = Timestamp.now()
 
-  // Find all posts that are scheduled and due
   const snap = await db
     .collection('posts')
     .where('status', '==', 'scheduled')
@@ -20,41 +27,88 @@ export async function postScheduledContent(): Promise<void> {
 
   console.log(`Found ${snap.size} post(s) to publish`)
 
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.YOUTUBE_CLIENT_ID,
-    process.env.YOUTUBE_CLIENT_SECRET,
-    process.env.YOUTUBE_REDIRECT_URI
-  )
-  oauth2Client.setCredentials({
-    refresh_token: process.env.YOUTUBE_REFRESH_TOKEN,
-  })
-
   for (const docSnap of snap.docs) {
-    const post = docSnap.data()
-    try {
-      if (post['platforms'] && (post['platforms'] as string[]).includes('youtube')) {
-        // MVP: YouTube Community posts require separate YouTube API endpoints
-        // For now, log the scheduled post — full video upload in Phase 2
-        console.log(
-          `Scheduled YouTube post: "${(post['caption'] as string).substring(0, 60)}..."`
-        )
-      }
-
-      // Instagram and TikTok publishing: Phase 2
-      // For now, mark as posted to demonstrate the scheduler works
-      await db.collection('posts').doc(docSnap.id).update({
-        status: 'posted',
-        postedAt: Timestamp.now(),
-      })
-
-      console.log(`Post ${docSnap.id} marked as posted`)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      console.error(`Failed to publish post ${docSnap.id}:`, message)
-      await db.collection('posts').doc(docSnap.id).update({
-        status: 'failed',
-        errorMessage: message,
-      })
+    const post = docSnap.data() as {
+      platforms: string[]
+      caption: string
+      title?: string
+      tags?: string[]
+      mediaUrl?: string | null
+      mediaType?: 'image' | 'video' | null
     }
+
+    const platformResults: Record<string, PlatformResult> = {}
+    let anyFailed = false
+
+    // Mark in-progress immediately to avoid double-posting on retry
+    await db.collection('posts').doc(docSnap.id).update({ status: 'posting' })
+
+    for (const platform of post.platforms) {
+      try {
+        if (platform === 'youtube') {
+          if (!post.mediaUrl) {
+            throw new Error('YouTube requires a video file')
+          }
+          const title = post.title ?? post.caption.substring(0, 100)
+          const { videoId } = await postToYouTube(
+            post.mediaUrl,
+            title,
+            post.caption,
+            post.tags ?? []
+          )
+          platformResults.youtube = { status: 'posted', postId: videoId }
+          console.log(`✅ YouTube posted: ${videoId}`)
+
+        } else if (platform === 'instagram') {
+          if (!post.mediaUrl || !post.mediaType) {
+            throw new Error('Instagram requires a media file (image or video)')
+          }
+          const { mediaId } = await postToInstagram(
+            post.mediaUrl,
+            post.mediaType,
+            post.caption
+          )
+          platformResults.instagram = { status: 'posted', postId: mediaId }
+          console.log(`✅ Instagram posted: ${mediaId}`)
+
+        } else if (platform === 'tiktok') {
+          if (!post.mediaUrl) {
+            throw new Error('TikTok requires a video file')
+          }
+          const { publishId } = await postToTikTok(
+            post.mediaUrl,
+            post.caption
+          )
+          platformResults.tiktok = { status: 'posted', postId: publishId }
+          console.log(`✅ TikTok posted: ${publishId}`)
+
+        } else {
+          console.warn(`Unknown platform: ${platform}`)
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        console.error(`❌ Failed to post to ${platform} for post ${docSnap.id}:`, message)
+        platformResults[platform] = { status: 'failed', error: message }
+        anyFailed = true
+      }
+    }
+
+    // Determine overall status
+    const allPosted = Object.values(platformResults).every(r => r.status === 'posted')
+    const overallStatus = allPosted ? 'posted' : anyFailed ? 'partial' : 'failed'
+
+    const errorMessages = Object.entries(platformResults)
+      .filter(([, r]) => r.status === 'failed')
+      .map(([p, r]) => `${p}: ${r.error}`)
+      .join('; ')
+
+    await db.collection('posts').doc(docSnap.id).update({
+      status: overallStatus === 'partial' ? 'posted' : overallStatus,
+      postedAt: Timestamp.now(),
+      platformResults,
+      errorMessage: errorMessages || null,
+    })
+
+    console.log(`Post ${docSnap.id} → ${overallStatus}`)
   }
 }

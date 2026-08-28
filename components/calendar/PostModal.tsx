@@ -18,6 +18,8 @@ const PLATFORMS: { key: Platform; label: string }[] = [
 export default function PostModal({ onClose, onSaved }: PostModalProps) {
   const [platforms, setPlatforms] = useState<Platform[]>(['youtube'])
   const [caption, setCaption] = useState('')
+  const [title, setTitle] = useState('')
+  const [tags, setTags] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
   const [captionContext, setCaptionContext] = useState('')
   const [generating, setGenerating] = useState(false)
@@ -99,7 +101,9 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
   }
 
   async function handleSave() {
+    const needsTitle = platforms.includes('youtube')
     if (!caption.trim() || !scheduledAt || platforms.length === 0) return
+    if (needsTitle && !title.trim()) return
     setSaving(true)
     try {
       let mediaUrl: string | null = null
@@ -114,6 +118,8 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
         body: JSON.stringify({
           platforms,
           caption,
+          title: title.trim() || undefined,
+          tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
           scheduledAt,
           mediaUrl,
           mediaType: mediaUrl ? mediaType : null,
@@ -165,6 +171,40 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
               ))}
             </div>
           </div>
+
+          {/* Title (YouTube required) */}
+          {platforms.includes('youtube') && (
+            <div>
+              <label className="text-xs tracking-widest uppercase text-stone-400 block mb-2">
+                Video Title <span className="text-amber-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Hate Me All You Want — Official Music Video"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                maxLength={100}
+                className="w-full bg-stone-800 border border-stone-700 px-3 py-2 text-sm text-stone-300 placeholder-stone-600 outline-none"
+              />
+              <p className="text-stone-600 text-xs mt-1">{title.length}/100</p>
+            </div>
+          )}
+
+          {/* Tags (YouTube optional) */}
+          {platforms.includes('youtube') && (
+            <div>
+              <label className="text-xs tracking-widest uppercase text-stone-400 block mb-2">
+                Tags <span className="text-stone-600">(komma-gescheiden)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. jack howlin, music, indie"
+                value={tags}
+                onChange={e => setTags(e.target.value)}
+                className="w-full bg-stone-800 border border-stone-700 px-3 py-2 text-sm text-stone-300 placeholder-stone-600 outline-none"
+              />
+            </div>
+          )}
 
           {/* Media Upload */}
           <div>

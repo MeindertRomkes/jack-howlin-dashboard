@@ -5,10 +5,12 @@ import type { Platform } from '@/types'
 
 export async function POST(req: NextRequest) {
   try {
-    const { platforms, caption, mediaUrl, mediaType, scheduledAt } =
+    const { platforms, caption, title, tags, mediaUrl, mediaType, scheduledAt } =
       (await req.json()) as {
         platforms: Platform[]
         caption: string
+        title?: string
+        tags?: string[]
         mediaUrl: string | null
         mediaType: 'image' | 'video' | null
         scheduledAt: string
@@ -17,10 +19,13 @@ export async function POST(req: NextRequest) {
     const docRef = await adminDb.collection('posts').add({
       platforms,
       caption,
+      title: title ?? null,
+      tags: tags ?? [],
       mediaUrl: mediaUrl ?? null,
       mediaType: mediaType ?? null,
       scheduledAt: Timestamp.fromDate(new Date(scheduledAt)),
       status: 'scheduled',
+      platformResults: {},
       postedAt: null,
       errorMessage: null,
       createdAt: Timestamp.now(),

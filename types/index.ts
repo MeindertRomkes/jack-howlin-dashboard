@@ -24,10 +24,13 @@ export interface Post {
   id: string
   platforms: Platform[]
   caption: string
+  title?: string
+  tags?: string[]
   mediaUrl: string | null
   mediaType: 'image' | 'video' | null
   scheduledAt: Timestamp
   status: PostStatus
+  platformResults?: Record<string, { status: 'posted' | 'failed'; postId?: string; error?: string }>
   postedAt: Timestamp | null
   errorMessage: string | null
   createdAt: Timestamp
