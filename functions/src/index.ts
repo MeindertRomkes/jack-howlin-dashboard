@@ -25,7 +25,15 @@ export const fetchCommentsScheduled = onSchedule(
 
 // HTTP trigger for manual testing
 export const fetchCommentsHttp = onRequest(
-  { region: 'europe-west1' },
+  {
+    region: 'europe-west1',
+    secrets: [
+      'YOUTUBE_CLIENT_ID',
+      'YOUTUBE_CLIENT_SECRET',
+      'YOUTUBE_REDIRECT_URI',
+      'YOUTUBE_REFRESH_TOKEN',
+    ],
+  },
   async (req, res) => {
     await fetchYouTubeComments()
     res.json({ success: true })
