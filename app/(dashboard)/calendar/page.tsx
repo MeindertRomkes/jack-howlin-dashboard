@@ -166,8 +166,13 @@ export default function CalendarPage() {
             postId={generateModalPostId}
             caption={post?.caption ?? ''}
             onClose={() => setGenerateModalPostId(null)}
-            onAssetSelected={(url, type) => {
-              updateDoc(doc(db, 'posts', generateModalPostId), { mediaUrl: url, mediaType: type })
+            onAssetSelected={async (url, type) => {
+              try {
+                await updateDoc(doc(db, 'posts', generateModalPostId), { mediaUrl: url, mediaType: type })
+                await loadPosts()
+              } catch (err) {
+                console.error(err)
+              }
               setGenerateModalPostId(null)
             }}
           />

@@ -26,13 +26,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const jobId = jobDoc.id
   const jobData = jobDoc.data()
 
-  if (state === 'success') {
+  if (state === 'success' && jobData.state !== 'success') {
     const parsed = resultJson ? JSON.parse(resultJson) as { resultUrls: string[] } : { resultUrls: [] }
     await updateKieJob(jobId, { state: 'success', resultUrls: parsed.resultUrls })
     for (const url of parsed.resultUrls) {
       await createMediaAsset({ url, type: jobData.model === 'photo' ? 'image' : 'video', prompt: jobData.prompt, kieJobId: jobId, ...(jobData.linkedPostId ? { linkedPostId: jobData.linkedPostId } : {}) })
     }
-  } else if (state === 'fail') {
+  } else if (state === 'fail' && jobData.state !== 'fail') {
     await updateKieJob(jobId, { state: 'fail', failMsg: failMsg ?? 'Onbekende fout' })
   }
 
