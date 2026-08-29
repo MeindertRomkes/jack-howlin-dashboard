@@ -24,6 +24,8 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import VisualPromptStudio from '@/components/studio/VisualPromptStudio'
+import JackCoreSetManager from '@/components/settings/JackCoreSetManager'
+import SunoLibraryManager from '@/components/settings/SunoLibraryManager'
 
 export default function SettingsPage() {
   const [persona, setPersona] = useState<PersonaConfig>(DEFAULT_PERSONA_CONFIG)
@@ -486,6 +488,18 @@ export default function SettingsPage() {
       {/* 4. OUTLAW AMERICANA AI VIDEO & VISUAL PROMPT STUDIO       */}
       {/* ───────────────────────────────────────────────────────── */}
       <VisualPromptStudio />
+
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* 5. AI CONTENT STUDIO — CORE SET & SUNO LIBRARY           */}
+      {/* ───────────────────────────────────────────────────────── */}
+      <div className="mt-8 space-y-6">
+        <div className="p-6 bg-stone-900/40 border border-stone-800/60 rounded-xl">
+          <JackCoreSetManager />
+        </div>
+        <div className="p-6 bg-stone-900/40 border border-stone-800/60 rounded-xl">
+          <SunoLibraryManager />
+        </div>
+      </div>
     </div>
   )
 }
