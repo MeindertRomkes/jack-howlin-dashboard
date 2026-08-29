@@ -5,7 +5,24 @@ service firebase.storage {
       allow read: if request.auth != null;
       allow write: if request.auth != null
         && request.auth.token.email == 'romkesmeindert@gmail.com'
-        && request.resource.size < 200 * 1024 * 1024; // 200 MB max
+        && request.resource.size < 200 * 1024 * 1024;
+    }
+    match /jack-core-set/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.token.email == 'romkesmeindert@gmail.com'
+        && request.resource.size < 30 * 1024 * 1024;
+    }
+    match /suno-library/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.token.email == 'romkesmeindert@gmail.com'
+        && request.resource.size < 15 * 1024 * 1024;
+    }
+    match /media-library/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
   }
 }
+

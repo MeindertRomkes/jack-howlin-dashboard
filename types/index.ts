@@ -196,3 +196,50 @@ export interface IntelligenceReport {
   actionablePlaybooks: ActionablePlaybookItem[]
 }
 
+// ─── AI Content Studio ───────────────────────────────────────────────────────
+
+export type KieModel = 'photo' | 'video'
+export type KieState = 'waiting' | 'success' | 'fail'
+
+export interface KieJob {
+  id: string
+  taskId: string
+  model: KieModel
+  kieModel: string
+  state: KieState
+  prompt: string
+  aspectRatio: string
+  resultUrls: string[]
+  linkedPostId?: string
+  failMsg?: string
+  createdAt: Timestamp
+  completedAt?: Timestamp
+}
+
+export interface MediaAsset {
+  id: string
+  url: string
+  type: 'image' | 'video'
+  prompt: string
+  kieJobId: string
+  linkedPostId?: string
+  createdAt: Timestamp
+}
+
+export interface SunoTrack {
+  id: string
+  name: string
+  storageUrl: string
+  publicUrl: string
+  durationSeconds?: number
+  createdAt: Timestamp
+}
+
+export interface JackCoreSetPhoto {
+  id: string
+  label: string
+  storageUrl: string
+  publicUrl: string
+  order: number
+  createdAt: Timestamp
+}
