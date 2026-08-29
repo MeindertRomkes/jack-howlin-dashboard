@@ -3,12 +3,8 @@ import { adminDb } from '@/lib/firebase-admin'
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager'
 
 function getBaseUrl(req: NextRequest): string {
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host')
-  const proto = req.headers.get('x-forwarded-proto') || 'https'
-  if (host && !host.includes('0.0.0.0') && !host.includes('127.0.0.1')) {
-    return `${proto}://${host}`
-  }
-  if (process.env.NODE_ENV === 'development') {
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || ''
+  if (host.includes('localhost:3000') || host.includes('127.0.0.1:3000')) {
     return 'http://localhost:3000'
   }
   return 'https://jack-howlin-dashboard--jack-howlin-dashboard.europe-west4.hosted.app'
