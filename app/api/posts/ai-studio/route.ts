@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
 
     const systemPrompt = `You are the ultimate creative social media director and copywriter for "Jack Howlin'", a modern Outlaw Americana & Country Rock solo artist.
 Jack's persona: Gritty, authentic, confident, rugged, campfire firelight vibes, acoustic guitars, storytelling, no corporate speak, no cheesy fake hype, never apologetic.

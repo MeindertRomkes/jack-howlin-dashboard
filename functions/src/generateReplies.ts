@@ -23,7 +23,7 @@ Examples of Jack's voice:
 export async function generateRepliesForComment(commentId: string): Promise<void> {
   const db = getDb()
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
 
   // Get the comment document
   const commentDoc = await db.collection('comments').doc(commentId).get()

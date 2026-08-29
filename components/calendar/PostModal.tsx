@@ -223,7 +223,9 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
       })
 
       const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Generatie mislukt')
+      }
 
       // Apply AI output automatically
       if (data.caption) setCaption(data.caption)
@@ -253,6 +255,7 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
       setTimeout(() => setAiSuccessMessage(null), 4000)
     } catch (err) {
       console.error('AI generation failed:', err)
+      setAiSuccessMessage(err instanceof Error ? `Fout: ${err.message}` : 'AI generatie mislukt')
     } finally {
       setIsGeneratingAI(false)
     }

@@ -3,9 +3,17 @@ import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
   const session = request.cookies.get('session')
-  if (!session && !request.nextUrl.pathname.startsWith('/login')) {
-    return NextResponse.redirect(new URL('/login', request.url))
+  const { pathname } = request.nextUrl
+
+  if (!session) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
+    }
+    if (!pathname.startsWith('/login')) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
   }
+
   return NextResponse.next()
 }
 
