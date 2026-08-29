@@ -23,6 +23,7 @@ import {
   Trash2,
   RefreshCw,
 } from 'lucide-react'
+import VisualPromptStudio from '@/components/studio/VisualPromptStudio'
 
 export default function SettingsPage() {
   const [persona, setPersona] = useState<PersonaConfig>(DEFAULT_PERSONA_CONFIG)
@@ -480,6 +481,11 @@ export default function SettingsPage() {
           ))}
         </div>
       </section>
+
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* 4. OUTLAW AMERICANA AI VIDEO & VISUAL PROMPT STUDIO       */}
+      {/* ───────────────────────────────────────────────────────── */}
+      <VisualPromptStudio />
     </div>
   )
 }
