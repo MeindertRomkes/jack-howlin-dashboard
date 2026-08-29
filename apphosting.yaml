@@ -82,3 +82,21 @@ env:
     secret: GEMINI_API_KEY
     availability:
       - RUNTIME
+
+  # ─── AI Content Studio ──────────────────────────────────────────────────────
+
+  - variable: KIE_API_KEY
+    secret: KIE_API_KEY
+    availability:
+      - RUNTIME
+
+  - variable: KIE_API_BASE_URL
+    value: https://api.kie.ai/api/v1
+    availability:
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://jack-howlin-dashboard--pr1-57c2e9w9.us-central1.hosted.app
+    availability:
+      - BUILD
+      - RUNTIME
