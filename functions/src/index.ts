@@ -24,6 +24,7 @@ const COMMENTS_SECRETS = [
 const POSTING_SECRETS = [
   ...COMMENTS_SECRETS,
   'TIKTOK_ACCESS_TOKEN',
+  'TIKTOK_OPEN_ID',
 ]
 
 // ── Comments: fetch every 30 minutes ──────────────────────
