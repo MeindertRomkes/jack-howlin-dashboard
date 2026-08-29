@@ -96,7 +96,7 @@ env:
       - RUNTIME
 
   - variable: NEXT_PUBLIC_APP_URL
-    value: https://jack-howlin-dashboard--pr1-57c2e9w9.us-central1.hosted.app
+    value: https://jack-howlin-dashboard--jack-howlin-dashboard.europe-west4.hosted.app
     availability:
       - BUILD
       - RUNTIME
