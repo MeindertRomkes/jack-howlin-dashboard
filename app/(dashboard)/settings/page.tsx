@@ -14,6 +14,7 @@ import {
   Sparkles,
   Save,
   CheckCircle2,
+  AlertCircle,
   Radio,
   Star,
   Users,
@@ -35,6 +36,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [newRule, setNewRule] = useState('')
 
   useEffect(() => {
@@ -63,12 +65,15 @@ export default function SettingsPage() {
     e.preventDefault()
     setSaving(true)
     setSaveSuccess(false)
+    setSaveError(null)
     try {
       await savePersonaConfig(persona)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 4000)
     } catch (err) {
       console.error('Error saving persona:', err)
+      setSaveError('Opslaan mislukt. Controleer je verbinding en probeer het opnieuw.')
+      setTimeout(() => setSaveError(null), 5000)
     } finally {
       setSaving(false)
     }
@@ -268,6 +273,13 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {saveError && (
+          <div className="p-3 bg-red-950/60 border border-red-800 text-red-300 text-xs rounded-xl flex items-center gap-2 animate-fadeIn">
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <span>{saveError}</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Artist Name */}
           <div className="space-y-1.5">
@@ -415,6 +427,18 @@ export default function SettingsPage() {
             className="w-full bg-stone-950 border border-stone-800 rounded-lg p-3 text-xs text-stone-200 focus:outline-none focus:border-amber-500 leading-relaxed font-sans"
             placeholder="Bijv: Als iemand vraagt waar de muziek te luisteren is, noem altijd Spotify."
           />
+        </div>
+
+        {/* Second save button at bottom of long form */}
+        <div className="flex items-center justify-end pt-4 border-t border-stone-800">
+          <button
+            type="submit"
+            disabled={saving}
+            className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-stone-950 font-bold px-5 py-2.5 rounded-lg text-xs uppercase tracking-wider transition-all shadow flex items-center gap-1.5"
+          >
+            {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            <span>{saving ? 'Opslaan...' : 'Wijzigingen Opslaan'}</span>
+          </button>
         </div>
       </form>
 

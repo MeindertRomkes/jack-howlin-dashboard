@@ -22,133 +22,14 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import Link from 'next/link'
-import { Timestamp } from 'firebase/firestore'
-
-const DEFAULT_REPORT: IntelligenceReport = {
-  summary: "Short-form video's en rauwe Outlaw storytelling stuwen het bereik. 'Whiskey in the Shadows' (+31%) en 'Hate Me All You Want' (+18.5%) domineren de Spotify groei, terwijl YouTube Shorts 84.5% kijktijd halen.",
-  generatedAt: Timestamp.now(),
-  winningHooks: [
-    {
-      hookTitle: 'Highway Midnight Intro + Heavy Bassline',
-      description: 'Korte video-opener met nachtelijke snelwegbeelden en de eerste regel van het refrein binnen 2 seconden.',
-      effectivenessMultiplier: '3.2x kijktijd',
-      exampleScene: 'Gele koplampen op nat asfalt met flitsende tekst: "They talked. I kept riding."',
-    },
-    {
-      hookTitle: 'Dusty Hat Silhouette Reveal',
-      description: 'Close-up van de versleten cowboyhoed met rauwe akoestische gitaar.',
-      effectivenessMultiplier: '2.4x reactieratio',
-      exampleScene: 'Langzame opwaartse tilt naar Jack met de hoed laag over de ogen: "I still wear this crown."',
-    },
-    {
-      hookTitle: 'Whiskey Bar Neon Lore Snippet',
-      description: 'Donkere roadside bar sfeer met vintage neonlicht en storytelling quote.',
-      effectivenessMultiplier: '2.8x shares',
-      exampleScene: 'Glazige bar counter in amber licht: "Burned bridges make the brightest lanterns."',
-    },
-  ],
-  contentFatigueAlerts: [
-    'Statische albumhoezen zonder beweging verliezen 60% van kijkers in de eerste 3 seconden. Gebruik altijd video-motion of visualizers.',
-    'Vermijd pop-country captions; rauwe, bondige statements converteren 3x vaker naar Spotify saves.',
-  ],
-  bestPostingWindows: [
-    {
-      platform: 'youtube',
-      bestDay: 'Woensdag & Vrijdag',
-      bestTime: '19:30 - 21:00 CET',
-      reason: 'Hoogste engagementpiek onder Americana luisteraars na werktijd.',
-    },
-    {
-      platform: 'instagram',
-      bestDay: 'Donderdag & Zondag',
-      bestTime: '20:00 - 22:00 CET',
-      reason: 'Reels saves en shares pieken op zondagavond.',
-    },
-    {
-      platform: 'tiktok',
-      bestDay: 'Dinsdag & Vrijdag',
-      bestTime: '18:00 - 20:00 CET',
-      reason: 'Hoogste algorithmic velocity voor outlaw country hashtags.',
-    },
-  ],
-  trackMomentumRadar: [
-    {
-      trackTitle: 'Whiskey in the Shadows',
-      momentumStatus: 'surging',
-      growthNote: '+31.0% groei deze week, hoogste doorklikratio vanaf TikTok.',
-      actionRecommendation: 'Start de 14-daagse releasecampagne en tease de akoestische stem.',
-    },
-    {
-      trackTitle: 'Hate Me All You Want',
-      momentumStatus: 'surging',
-      growthNote: '+18.5% streams op Spotify, 48.5k totale streams.',
-      actionRecommendation: 'Koppel een gerichte Outlaw Merch post (Statement T-Shirt) aan deze track.',
-    },
-    {
-      trackTitle: 'I Still Wear This Crown',
-      momentumStatus: 'surging',
-      growthNote: '+24.1% TikTok views, resonantie rond de hoed als symbool.',
-      actionRecommendation: 'Lanceer een 15s lyric video met focus op resilience en authenticiteit.',
-    },
-    {
-      trackTitle: 'Gravel Road Confessions',
-      momentumStatus: 'steady',
-      growthNote: '21.8k streams, stabiele kern van loyale luisteraars.',
-      actionRecommendation: 'Deel een storytelling post over de oorsprong van het nummer.',
-    },
-  ],
-  actionablePlaybooks: [
-    {
-      id: 'playbook-1',
-      type: 'merch_push',
-      title: 'Hate Me All You Want — Statement Merch Drop',
-      targetTrack: 'Hate Me All You Want',
-      reason: 'Track piekt op Spotify (+18.5%) en comments vragen naar shirts.',
-      recommendedHook: 'Ze praatten. Ik bleef rijden. Draag de outlaw mentaliteit.',
-      suggestedPlatforms: ['instagram', 'facebook'],
-      priority: 'high',
-      actionPayload: {
-        caption: 'Hate me all you want. The crown stays on. Limited merch drop live at jackhowlin.com',
-        suggestedFormat: 'Carousel met vintage motel mockup',
-      },
-    },
-    {
-      id: 'playbook-2',
-      type: 'lyric_short',
-      title: 'I Still Wear This Crown — High Retention Reel',
-      targetTrack: 'I Still Wear This Crown',
-      reason: 'Hoogste comment ratio op YouTube Shorts (84% kijktijd).',
-      recommendedHook: 'Stoffige hoed + tekstflits bij seconde 1.',
-      suggestedPlatforms: ['youtube', 'tiktok'],
-      priority: 'high',
-      actionPayload: {
-        caption: 'Beaten up. Never broken. Still standing.',
-        suggestedFormat: '9:16 Cinematic Short',
-      },
-    },
-    {
-      id: 'playbook-3',
-      type: 'song_release',
-      title: 'Whiskey in the Shadows — Viral Drop Wave',
-      targetTrack: 'Whiskey in the Shadows',
-      reason: 'Sterkste stijger (+31%) met hoge share-ratio.',
-      recommendedHook: 'Roadside bar neon + slow burn lyric reveal.',
-      suggestedPlatforms: ['youtube', 'instagram', 'tiktok'],
-      priority: 'high',
-      actionPayload: {
-        caption: 'Burned bridges make the brightest lanterns. Full track streaming now.',
-        suggestedFormat: '14-Dagen Release Funnel',
-      },
-    },
-  ],
-}
 
 export default function AnalyticsPage() {
   const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null)
-  const [report, setReport] = useState<IntelligenceReport>(DEFAULT_REPORT)
+  const [report, setReport] = useState<IntelligenceReport | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'hooks' | 'tracks' | 'platforms'>('overview')
+  const [loading, setLoading] = useState(true)
 
   async function loadData() {
     try {
@@ -160,6 +41,8 @@ export default function AnalyticsPage() {
       if (repData && repData.winningHooks?.length) setReport(repData)
     } catch (err) {
       console.error('Error loading analytics data:', err)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -238,6 +121,34 @@ export default function AnalyticsPage() {
         <div className="p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs rounded-xl flex items-center gap-2 animate-fadeIn">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
           <span>{syncMessage}</span>
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-stone-900 border border-stone-800 rounded-xl p-4 h-28 animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {/* Empty state — no report yet */}
+      {!loading && !report && (
+        <div className="bg-stone-900 border border-stone-800 rounded-xl p-12 text-center shadow-lg">
+          <BarChart3 className="w-12 h-12 text-stone-600 mx-auto mb-3" />
+          <h2 className="text-base font-bold text-stone-200 mb-2">Nog geen intelligence rapport beschikbaar</h2>
+          <p className="text-stone-500 text-xs max-w-sm mx-auto mb-4">
+            Klik op &quot;Sync Live Data &amp; AI&quot; om voor het eerst je YouTube, Spotify en Instagram data te synchroniseren en een Gemini analyse te genereren.
+          </p>
+          <button
+            onClick={handleLiveSync}
+            disabled={syncing}
+            className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-stone-950 font-bold px-5 py-2.5 rounded-lg text-xs uppercase tracking-wider transition-all shadow flex items-center gap-2 mx-auto"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+            <span>{syncing ? 'Analyseren...' : 'Sync Live Data & AI'}</span>
+          </button>
         </div>
       )}
 

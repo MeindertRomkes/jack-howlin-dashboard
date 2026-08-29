@@ -12,6 +12,7 @@ export function middleware(request: NextRequest) {
     pathname.endsWith('.jpg') ||
     pathname.endsWith('.png') ||
     pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/studio/callback') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/terms') ||
     pathname.startsWith('/privacy') ||

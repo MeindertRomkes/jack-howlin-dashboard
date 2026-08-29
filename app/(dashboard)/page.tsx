@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { Post, Platform, VoiceHistory } from '@/types'
@@ -119,7 +120,7 @@ export default function OverviewPage() {
 
         <div className="flex items-center gap-2.5 flex-wrap z-10">
           <a
-            href="/calendar"
+            href="/calendar?openCampaign=true"
             className="inline-flex items-center gap-2 bg-stone-950 border border-amber-500/50 hover:bg-amber-500/10 text-amber-400 font-bold px-3.5 py-2.5 rounded-xl text-xs tracking-wider uppercase transition-all shadow-sm"
           >
             <Sparkles className="w-4 h-4 text-amber-500" />
@@ -127,7 +128,7 @@ export default function OverviewPage() {
           </a>
 
           <a
-            href="/calendar"
+            href="/calendar?newPost=true"
             className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold px-4 py-2.5 rounded-xl text-xs tracking-wider uppercase transition-all shadow-md"
           >
             <Calendar className="w-4 h-4" />
@@ -159,7 +160,7 @@ export default function OverviewPage() {
         <StatCard
           icon={BrainCircuit}
           label="Voice Learning Samples"
-          value={loading ? '—' : String(stats.voiceSamples || 20)}
+          value={loading ? '—' : String(stats.voiceSamples)}
           sub="Actieve leervoorbeelden"
           href="/settings"
           accent="purple"
@@ -167,7 +168,7 @@ export default function OverviewPage() {
         <StatCard
           icon={Users}
           label="Geregistreerde Fans"
-          value={loading ? '—' : String(stats.totalFans || 37)}
+          value={loading ? '—' : String(stats.totalFans)}
           sub="In Fan CRM & Superfans"
           href="/settings"
           accent="green"
@@ -422,9 +423,9 @@ function StatCard({
   )
 
   return href ? (
-    <a href={href} className="block">
+    <Link href={href} className="block">
       {content}
-    </a>
+    </Link>
   ) : (
     content
   )

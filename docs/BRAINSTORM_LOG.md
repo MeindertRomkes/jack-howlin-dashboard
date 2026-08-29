@@ -59,26 +59,30 @@ $$\text{Data & Trends} \longrightarrow \text{AI Intelligence} \longrightarrow \t
   * Detecteert welke video-hooks (bijv. highway footage vs desert/saloon, quote in eerste 2 seconden) de hoogste retentie opleveren.
   * Signaleert piekende nummers en adviseert direct acties.
 
-### Pijler 2: 'New Song Launchpad' (Release Engine)
-* **14-Dagen Release Funnel:**
-  * **Fase 1 (Tease & Lore):** 7–15s audio snippets + cinematische visual prompts + cryptische quotes.
-  * **Fase 2 (Pre-Save & Countdown):** Focus op het verhaal achter het nummer + directe smart links.
-  * **Fase 3 (Drop Day):** Maximale publicatiegolf over alle 4 de netwerken.
-  * **Fase 4 (After-Drop & Engagement):** UGC (User Generated Content) stimuleren en fan reacties uitlichten.
-* **Lyric-to-Hook Selector:** AI scant songteksten en extraheert direct de 3 krachtigste hooks voor captions en video overlays.
+### Pijler 2: Song Release Launchpad (14-Dagen Funnel) [GEÏMPLEMENTEERD]
+* **Functie:** Genereert een strategische 14-daagse publicatiecampagne voor een nieuwe single:
+  * *Fase 1 (Dag -7 t/m -3):* Teasers, lore, cryptische quotes en akoestische snippets.
+  * *Fase 2 (Dag -2 t/m -1):* Pre-save link promotie en countdown teasers.
+  * *Fase 3 (Dag 0):* Drop Day – gecoördineerde posts op YouTube, Instagram, TikTok en Facebook.
+  * *Fase 4 (Dag +1 t/m +7):* Lyric deep-dives, storytelling achter de track, fan reacties en merch koppelingen.
+* **1-Click Scheduling:** Alle posts worden met 1 klik direct in de Firestore kalender geplaatst.
 
-### Pijler 3: Merch AI Promotion Engine
-* **Catalogus Integratie:** Merch-items (bijv. *'I Still Wear This Crown'* hoodie, pet, t-shirt) koppelen aan het dashboard.
-* **Multi-Angle Batch Generator:** Genereert in 1 klik 5 tot 10 unieke social posts in Jack's stijl (Subtiel, Storytelling, Defiance, Schaarste).
-* **Bulk Scheduler:** Direct verspreid inplannen in de contentkalender over meerdere weken.
+### Pijler 3: Merch AI Batch Machine [GEÏMPLEMENTEERD]
+* **Functie:** Genereert 3, 5 of 10 gerichte social posts met verschillende invalshoeken (story, schaarste, statement, rauw, lifestyle).
+* **Presets:** Direct gekoppeld aan Jack's catalogus (*I Still Wear This Crown Cap*, *Hate Me All You Want Hoodie*, *Outlaw Americana Tee*) of custom merchandise.
+* **1-Click Bulk Scheduling:** Automatisch verspreid over 2, 3 of 5 dagen direct ingepland in de kalender.
 
-### Pijler 4: Fan CRM & Superfan Loyalty
-* **Automatische herkenning:** Fans die herhaaldelijk reageren krijgen de status *Superfan*.
-* **Gepersonaliseerde interactie:** Exclusieve antwoorden, shoutouts of vroege toegang tot nieuwe tracks en merch.
+### Pijler 4: Fan CRM & Superfan Segmentatie [IN PLAN]
+* **Functie:** Herkent terugkerende reageerders op YouTube en Instagram, categoriseert superfans en leert fanvoorkeuren.
 
 ---
 
-## 🔒 Beslissingenlogboek (Architecture Decision Records)
+## 📈 Architectuur Beslissingen (ADR's)
+
+1. **ADR 001: Geen losse tools, één centraal Next.js App Router dashboard**
+2. **ADR 002: Gemini Flash als core intelligence engine voor voice-consistency en analytics synthesis**
+3. **ADR 003: Firestore als realtime single source of truth voor posts, snapshots, comments en intelligence reports**
+4. **ADR 004: Directe 1-Click scheduling acties vanuit data playbooks en batch generators direct naar de kalender**
 
 | Beslissing | Keuze | Rationale |
 |---|---|---|

@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { getScheduledPosts } from '@/lib/firestore'
 import { db } from '@/lib/firebase'
 import { updateDoc, doc } from 'firebase/firestore'
@@ -16,24 +17,41 @@ const MONTHS = [
   'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December',
 ]
 
-export default function CalendarPage() {
+function CalendarPageInner() {
   const now = new Date()
+  const searchParams = useSearchParams()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
   const [posts, setPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [showCampaignModal, setShowCampaignModal] = useState(false)
   const [showMerchModal, setShowMerchModal] = useState(false)
   const [generateModalPostId, setGenerateModalPostId] = useState<string | null>(null)
 
   async function loadPosts() {
-    const loaded = await getScheduledPosts()
-    setPosts(loaded)
+    setLoading(true)
+    try {
+      const loaded = await getScheduledPosts()
+      setPosts(loaded)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
     loadPosts().catch(console.error)
   }, [])
+
+  // Open modals via query params (from dashboard buttons)
+  useEffect(() => {
+    if (searchParams.get('openCampaign') === 'true') {
+      setShowCampaignModal(true)
+    }
+    if (searchParams.get('newPost') === 'true') {
+      setShowModal(true)
+    }
+  }, [searchParams])
 
   function prevMonth() {
     if (month === 0) {
@@ -61,7 +79,7 @@ export default function CalendarPage() {
           <div className="flex items-center gap-2 mb-1">
             <CalendarIcon className="w-5 h-5 text-amber-500" />
             <h1 className="text-xl font-extrabold tracking-wider uppercase text-stone-100">
-              Content Kalender & Release Planner
+              Content Kalender &amp; Release Planner
             </h1>
           </div>
           <p className="text-stone-400 text-xs">
@@ -75,7 +93,7 @@ export default function CalendarPage() {
             <button
               onClick={prevMonth}
               className="p-1 text-stone-400 hover:text-stone-100 hover:bg-stone-800 rounded transition-colors"
-              title="Vorige maand"
+              aria-label="Vorige maand"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -85,7 +103,7 @@ export default function CalendarPage() {
             <button
               onClick={nextMonth}
               className="p-1 text-stone-400 hover:text-stone-100 hover:bg-stone-800 rounded transition-colors"
-              title="Volgende maand"
+              aria-label="Volgende maand"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -122,7 +140,24 @@ export default function CalendarPage() {
 
       {/* Calendar Grid */}
       <div className="bg-stone-900 border border-stone-800 rounded-xl p-5 shadow-lg">
-        <CalendarGrid year={year} month={month} posts={posts} onGenerateVisual={setGenerateModalPostId} />
+        {loading ? (
+          <div className="space-y-3">
+            {/* Day headers skeleton */}
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="h-8 bg-stone-800 rounded animate-pulse" />
+              ))}
+            </div>
+            {/* Calendar cells skeleton */}
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <div key={i} className="h-24 bg-stone-800/60 rounded animate-pulse" />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <CalendarGrid year={year} month={month} posts={posts} onGenerateVisual={setGenerateModalPostId} />
+        )}
       </div>
 
       {/* Modals */}
@@ -179,5 +214,21 @@ export default function CalendarPage() {
         )
       })()}
     </div>
+  )
+}
+export default function CalendarPage() {
+  return (
+    <Suspense fallback={
+      <div className="space-y-6">
+        <div className="h-20 bg-stone-900 border border-stone-800 rounded-xl animate-pulse" />
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: 35 }).map((_, i) => (
+            <div key={i} className="h-24 bg-stone-800/60 rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    }>
+      <CalendarPageInner />
+    </Suspense>
   )
 }

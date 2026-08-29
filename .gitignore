@@ -42,3 +42,6 @@ next-env.d.ts
 .superpowers/
 
 firebase-debug.log
+
+# Firebase local deploy cache
+.firebase/

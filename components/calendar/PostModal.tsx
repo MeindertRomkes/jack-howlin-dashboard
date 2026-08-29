@@ -147,6 +147,15 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
   const [saving, setSaving] = useState(false)
   const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null)
 
+  // A11y: close on Escape key
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   // Auto-adapt platforms when media changes
   useEffect(() => {
     if (mediaType === 'image') {
@@ -332,8 +341,18 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
     !(platforms.includes('tiktok') && mediaType !== 'video')
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-stone-900 border border-stone-800 rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[94vh]">
+    <div
+      className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-6 overflow-y-auto"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="bg-stone-900 border border-stone-800 rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[94vh]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="post-modal-title"
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="px-6 py-4 bg-stone-950/80 border-b border-stone-800 flex items-center justify-between sticky top-0 z-20">
           <div className="flex items-center gap-3">
@@ -341,7 +360,7 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
               <Share2 className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold tracking-wider text-stone-100 flex items-center gap-2">
+              <h2 id="post-modal-title" className="text-base font-bold tracking-wider text-stone-100 flex items-center gap-2">
                 Nieuwe Post Publiceren
               </h2>
               <p className="text-xs text-stone-400">
@@ -379,6 +398,7 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
             <button
               onClick={onClose}
               className="p-1.5 text-stone-400 hover:text-stone-100 hover:bg-stone-800 rounded-lg transition-colors"
+              aria-label="Modal sluiten"
             >
               <X className="w-5 h-5" />
             </button>

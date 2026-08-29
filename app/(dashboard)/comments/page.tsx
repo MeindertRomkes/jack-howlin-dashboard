@@ -45,6 +45,7 @@ const PLATFORM_FILTERS: { key: Platform | 'all'; label: string }[] = [
   { key: 'all', label: 'Alle Kanalen' },
   { key: 'youtube', label: 'YouTube' },
   { key: 'instagram', label: 'Instagram' },
+  { key: 'tiktok', label: 'TikTok' },
   { key: 'facebook', label: 'Facebook' },
 ]
 
@@ -219,7 +220,7 @@ export default function CommentsPage() {
             <Inbox className="w-3.5 h-3.5" />
             <span>Te Beantwoorden</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+              className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
                 statusTab === 'unreplied' ? 'bg-stone-950 text-amber-400' : 'bg-stone-800 text-stone-300'
               }`}
             >
@@ -238,7 +239,7 @@ export default function CommentsPage() {
             <CheckCheck className="w-3.5 h-3.5" />
             <span>Al Beantwoord</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+              className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
                 statusTab === 'replied' ? 'bg-emerald-950 text-emerald-300' : 'bg-stone-800 text-stone-300'
               }`}
             >

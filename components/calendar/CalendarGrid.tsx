@@ -134,15 +134,15 @@ export default function CalendarGrid({ posts = [], year, month, onGenerateVisual
                             {platformList.map(p => (
                               <span
                                 key={p}
-                                className={`text-[9px] px-1 py-0.2 rounded font-bold uppercase border ${
+                                className={`text-[11px] px-1.5 py-0.5 rounded font-bold uppercase border ${
                                   PLATFORM_COLORS[p] ?? 'bg-stone-800 text-stone-400 border-stone-700'
                                 }`}
                               >
-                                {p.slice(0, 2)}
+                                {{ youtube: 'YT', instagram: 'IG', tiktok: 'TT', facebook: 'FB' }[p] ?? p.slice(0, 2).toUpperCase()}
                               </span>
                             ))}
                             {post.status && (
-                              <span className={`text-[8px] px-1 rounded uppercase font-extrabold ${
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-extrabold ${
                                 post.status === 'posted'
                                   ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/60'
                                   : post.status === 'failed'
