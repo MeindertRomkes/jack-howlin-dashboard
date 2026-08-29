@@ -1,9 +1,10 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { onRequest } from 'firebase-functions/v2/https'
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
-import { fetchYouTubeComments } from './fetchComments'
+import { fetchYouTubeComments, fetchInstagramComments, fetchFacebookComments } from './fetchComments'
 import { generateRepliesForComment } from './generateReplies'
 import { postScheduledContent } from './postScheduled'
+import { refreshInstagramToken } from './refreshTokens'
 
 const YOUTUBE_SECRETS = [
   'YOUTUBE_CLIENT_ID',
@@ -12,25 +13,31 @@ const YOUTUBE_SECRETS = [
   'YOUTUBE_REFRESH_TOKEN',
 ]
 
-const POSTING_SECRETS = [
+const COMMENTS_SECRETS = [
   ...YOUTUBE_SECRETS,
   'INSTAGRAM_ACCESS_TOKEN',
   'INSTAGRAM_USER_ID',
-  'TIKTOK_ACCESS_TOKEN',
   'FACEBOOK_PAGE_ACCESS_TOKEN',
   'FACEBOOK_PAGE_ID',
 ]
 
-// Fetch YouTube comments every 30 minutes
+const POSTING_SECRETS = [
+  ...COMMENTS_SECRETS,
+  'TIKTOK_ACCESS_TOKEN',
+]
+
+// ── Comments: fetch every 30 minutes ──────────────────────
 export const fetchCommentsScheduled = onSchedule(
   {
     schedule: 'every 30 minutes',
     region: 'europe-west1',
-    secrets: YOUTUBE_SECRETS,
+    secrets: COMMENTS_SECRETS,
   },
   async () => {
     console.log('Running scheduled comment fetch...')
     await fetchYouTubeComments()
+    await fetchInstagramComments()
+    await fetchFacebookComments()
   }
 )
 
@@ -38,15 +45,17 @@ export const fetchCommentsScheduled = onSchedule(
 export const fetchCommentsHttp = onRequest(
   {
     region: 'europe-west1',
-    secrets: YOUTUBE_SECRETS,
+    secrets: COMMENTS_SECRETS,
   },
   async (req, res) => {
     await fetchYouTubeComments()
+    await fetchInstagramComments()
+    await fetchFacebookComments()
     res.json({ success: true })
   }
 )
 
-// Generate AI replies when a new comment is created
+// ── Generate AI replies ────────────────────────────────────
 export const onNewComment = onDocumentCreated(
   {
     document: 'comments/{commentId}',
@@ -60,15 +69,14 @@ export const onNewComment = onDocumentCreated(
   }
 )
 
-// Publish scheduled posts every 5 minutes
-// Higher memory + timeout to handle video uploads to YouTube
+// ── Scheduled posting: every 5 minutes ────────────────────
 export const postScheduledJob = onSchedule(
   {
     schedule: 'every 5 minutes',
     region: 'europe-west1',
     secrets: POSTING_SECRETS,
     memory: '2GiB',
-    timeoutSeconds: 540, // 9 minutes — max for scheduled functions
+    timeoutSeconds: 540,
   },
   async () => {
     console.log('Running scheduled post publisher...')
@@ -87,5 +95,18 @@ export const postScheduledHttp = onRequest(
   async (req, res) => {
     await postScheduledContent()
     res.json({ success: true })
+  }
+)
+
+// ── Token refresh: daily at 03:00 ─────────────────────────
+export const refreshTokensScheduled = onSchedule(
+  {
+    schedule: '0 3 * * *',
+    region: 'europe-west1',
+    secrets: ['INSTAGRAM_ACCESS_TOKEN'],
+  },
+  async () => {
+    console.log('Running daily token refresh...')
+    await refreshInstagramToken()
   }
 )
