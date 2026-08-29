@@ -6,7 +6,8 @@
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "publishedAt", "order": "DESCENDING" }
-      ]
+      ],
+      "density": "SPARSE_ALL"
     },
     {
       "collectionGroup": "posts",
@@ -14,7 +15,17 @@
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "scheduledAt", "order": "ASCENDING" }
-      ]
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "kie_jobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "taskId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ],
+      "density": "SPARSE_ALL"
     }
   ],
   "fieldOverrides": []

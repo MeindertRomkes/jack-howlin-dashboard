@@ -5,5 +5,22 @@ service cloud.firestore {
       // NOTE: Replace REPLACE_WITH_YOUR_GOOGLE_EMAIL with your actual Google account email before deploying.
       allow read, write: if request.auth != null && request.auth.token.email == 'romkesmeindert@gmail.com';
     }
+
+    match /jack_core_set/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email == 'romkesmeindert@gmail.com';
+    }
+    match /suno_tracks/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email == 'romkesmeindert@gmail.com';
+    }
+    match /kie_jobs/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /media_library/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
   }
 }
