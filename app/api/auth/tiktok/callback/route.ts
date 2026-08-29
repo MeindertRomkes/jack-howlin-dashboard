@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebase-admin'
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager'
 
+function getBaseUrl(req: NextRequest): string {
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host')
+  const proto = req.headers.get('x-forwarded-proto') || 'https'
+  if (host && !host.includes('0.0.0.0') && !host.includes('127.0.0.1')) {
+    return `${proto}://${host}`
+  }
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3000'
+  }
+  return 'https://jack-howlin-dashboard--jack-howlin-dashboard.europe-west4.hosted.app'
+}
+
 async function updateSecret(name: string, payload: string) {
   try {
     const client = new SecretManagerServiceClient()
@@ -13,7 +25,7 @@ async function updateSecret(name: string, payload: string) {
         secret: { replication: { automatic: {} } },
       })
     } catch {
-      // Secret exists
+      // Secret already exists
     }
     await client.addSecretVersion({
       parent: `${parent}/secrets/${name}`,
@@ -27,23 +39,24 @@ async function updateSecret(name: string, payload: string) {
 
 // TikTok OAuth callback — exchanges auth code for access token
 export async function GET(req: NextRequest) {
+  const baseUrl = getBaseUrl(req)
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
   const error = searchParams.get('error')
 
   if (error) {
     console.error('TikTok OAuth error:', error)
-    return NextResponse.redirect(new URL('/settings?tiktok_error=' + encodeURIComponent(error), req.url))
+    return NextResponse.redirect(new URL('/settings?tiktok_error=' + encodeURIComponent(error), baseUrl))
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL('/settings?tiktok_error=no_code', req.url))
+    return NextResponse.redirect(new URL('/settings?tiktok_error=no_code', baseUrl))
   }
 
   try {
     const clientKey = process.env.TIKTOK_CLIENT_KEY || process.env.NEXT_PUBLIC_TIKTOK_CLIENT_KEY || 'sbawow4ti5dov9966f'
     const clientSecret = process.env.TIKTOK_CLIENT_SECRET || 'aQqubtYFMSN3JoBmmPdJI6t9AeiGkeWv'
-    const redirectUri = `${req.nextUrl.origin}/api/auth/tiktok/callback`
+    const redirectUri = `${baseUrl}/api/auth/tiktok/callback`
 
     console.log('Exchanging TikTok code with redirect URI:', redirectUri)
 
@@ -60,6 +73,7 @@ export async function GET(req: NextRequest) {
     })
 
     const tokenData = await tokenRes.json()
+    console.log('TikTok token response:', JSON.stringify(tokenData))
 
     if (tokenData.error || tokenData.data?.error_code) {
       const errMsg = tokenData.error_description || tokenData.data?.description || tokenData.error || 'Token exchange failed'
@@ -99,12 +113,12 @@ export async function GET(req: NextRequest) {
       console.error('Firestore token save error:', dbErr)
     }
 
-    return NextResponse.redirect(new URL('/settings?tiktok_connected=1', req.url))
+    return NextResponse.redirect(new URL('/settings?tiktok_connected=1', baseUrl))
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('TikTok token exchange failed:', message)
     return NextResponse.redirect(
-      new URL('/settings?tiktok_error=' + encodeURIComponent(message), req.url)
+      new URL('/settings?tiktok_error=' + encodeURIComponent(message), baseUrl)
     )
   }
 }
