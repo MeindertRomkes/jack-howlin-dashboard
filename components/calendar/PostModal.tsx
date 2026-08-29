@@ -117,10 +117,10 @@ const PLATFORM_DETAILS: Record<Platform, PlatformMeta> = {
 }
 
 const AI_QUICK_IDEAS = [
-  { label: '🎸 Acoustic Jam', prompt: 'Acoustic guitar session at night, deep outlaw americana sound, raw emotions' },
-  { label: '🔥 Nieuwe Single', prompt: 'Nieuwe single aankondiging, ruwe country rock gitaren, stream nu op Spotify & YouTube' },
-  { label: '🥃 Campfire Story', prompt: 'Campfire and whiskey vibes, verhalen over het leven onderweg, nieuwe muziek onderweg' },
-  { label: '🎬 Behind The Scenes', prompt: 'Behind the scenes in the studio recording vocals and guitar tracks, analog warmth' },
+  { label: '🔥 New Single Drop', prompt: 'New single release announcement, raw heavy outlaw country guitars, stream now on all platforms' },
+  { label: '🎸 Late Night Acoustic', prompt: 'Acoustic guitar session by the campfire, gravelly vocals, unfiltered outlaw americana' },
+  { label: '🥃 Road Stories & Whiskey', prompt: 'Whiskey and highway reflections, late night drive storytelling, gritty southern gothic vibes' },
+  { label: '🎬 Behind The Scenes', prompt: 'Behind the scenes in the analog studio tracking vocals and vintage tube amps' },
 ]
 
 export default function PostModal({ onClose, onSaved }: PostModalProps) {
@@ -706,7 +706,7 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold tracking-widest uppercase text-stone-300 flex items-center gap-2">
                     <Type className="w-4 h-4 text-amber-500" />
-                    Caption / Beschrijving
+                    Caption / Beschrijving (English by default)
                   </label>
                   <span
                     className={`text-xs ${
@@ -717,11 +717,34 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
                   </span>
                 </div>
 
+                {/* Trending Hashtag Quick Injectors */}
+                <div className="flex items-center gap-1.5 mb-2 overflow-x-auto pb-1 text-[11px]">
+                  <span className="text-stone-500 text-[10px] uppercase tracking-wider font-bold">
+                    + Trending Tags:
+                  </span>
+                  {[
+                    { label: 'Core Americana', tags: '#JackHowlin #OutlawCountry #Americana #AltCountry' },
+                    { label: 'Southern Gothic', tags: '#SouthernGothic #DarkCountry #WesternNoir #WhiskeySongs' },
+                    { label: 'Viral Discovery', tags: '#IndependentArtist #SingerSongwriter #RealCountryMusic #NewMusic' },
+                  ].map(group => (
+                    <button
+                      key={group.label}
+                      type="button"
+                      onClick={() => {
+                        setCaption(prev => (prev ? `${prev.trim()}\n\n${group.tags}` : group.tags))
+                      }}
+                      className="px-2 py-0.5 rounded bg-stone-800/90 hover:bg-stone-700 text-amber-400/90 border border-stone-700/80 transition-colors whitespace-nowrap"
+                    >
+                      + {group.label}
+                    </button>
+                  ))}
+                </div>
+
                 <textarea
                   value={caption}
                   onChange={e => setCaption(e.target.value)}
                   rows={5}
-                  placeholder="Schrijf hier je caption of klik bovenaan op '✨ Genereer Alles'..."
+                  placeholder="Write your caption here or click '✨ GENEREER ALLES' at the top..."
                   className="w-full bg-stone-950 border border-stone-800 rounded-xl p-3.5 text-sm text-stone-200 placeholder-stone-600 focus:border-amber-500 outline-none resize-none leading-relaxed"
                 />
               </div>
