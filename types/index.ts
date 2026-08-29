@@ -25,6 +25,8 @@ export interface Comment {
   isRepliedByCreator?: boolean
   creatorReplies?: string[]
   replyCount?: number
+  isSuperfan?: boolean
+  fanCommentCount?: number
 }
 
 export interface Post {
@@ -52,8 +54,45 @@ export interface VoiceHistory {
   timestamp: Timestamp
 }
 
-export interface UserProfile {
-  email: string
-  jackContext: string
-  connectedPlatforms: Platform[]
+export interface SyncState {
+  lastSyncAt: Timestamp
+  lastSyncStatus: 'success' | 'error'
+  totalCommentsCount: number
+  unrepliedCount: number
+  repliedCount: number
+  platforms: Partial<Record<Platform, { lastSyncAt: Timestamp; status: 'success' | 'error'; totalCount: number; error?: string }>>
+}
+
+export interface PersonaConfig {
+  artistName: string
+  genre: string
+  bio: string
+  toneGuidelines: string[]
+  smartLinks: {
+    spotify?: string
+    youtubeMusic?: string
+    appleMusic?: string
+    website?: string
+  }
+  customInstructions: string
+  updatedAt: Timestamp
+}
+
+export interface FanProfile {
+  id: string
+  author: string
+  platform: Platform
+  authorAvatar?: string
+  commentCount: number
+  firstCommentAt: Timestamp
+  lastCommentAt: Timestamp
+  isSuperfan: boolean
+  recentComments: string[]
+}
+
+export interface ConnectionHealth {
+  youtube: { connected: boolean; channelTitle?: string; channelId?: string; lastChecked?: Timestamp }
+  instagram: { connected: boolean; username?: string; lastChecked?: Timestamp; expiresAt?: Timestamp }
+  facebook: { connected: boolean; pageName?: string; lastChecked?: Timestamp }
+  tiktok: { connected: boolean; status: string; lastChecked?: Timestamp }
 }

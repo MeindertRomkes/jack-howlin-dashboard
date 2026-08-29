@@ -2,12 +2,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from '@/lib/auth'
-import { LayoutDashboard, MessageSquare, Calendar, LogOut, Flame } from 'lucide-react'
+import { LayoutDashboard, MessageSquare, Calendar, Sliders, LogOut, Flame } from 'lucide-react'
 
 const links = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/comments', label: 'Comments', icon: MessageSquare },
   { href: '/calendar', label: 'Kalender & Posts', icon: Calendar },
+  { href: '/settings', label: 'AI Persona & Studio', icon: Sliders },
 ]
 
 export default function Nav() {

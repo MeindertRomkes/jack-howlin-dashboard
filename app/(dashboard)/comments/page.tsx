@@ -2,14 +2,13 @@
 import { useEffect, useState } from 'react'
 import { getAllComments } from '@/lib/firestore'
 import CommentCard from '@/components/comments/CommentCard'
-import type { Comment, Platform } from '@/types'
+import type { Comment, Platform, SyncState } from '@/types'
 import {
   MessageSquare,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
   Clock,
-  Filter,
   Inbox,
   CheckCheck,
   ListFilter,
@@ -53,6 +52,7 @@ type StatusTab = 'unreplied' | 'replied' | 'all'
 
 export default function CommentsPage() {
   const [comments, setComments] = useState<Comment[]>([])
+  const [syncState, setSyncState] = useState<SyncState | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
@@ -61,8 +61,12 @@ export default function CommentsPage() {
 
   async function loadComments() {
     try {
-      const data = await getAllComments(100)
-      setComments(data)
+      const [commentsData, syncData] = await Promise.all([
+        getAllComments(100),
+        import('@/lib/firestore').then(m => m.getSyncState())
+      ])
+      setComments(commentsData)
+      setSyncState(syncData)
     } catch (err) {
       console.error('Error fetching comments:', err)
     } finally {
@@ -96,7 +100,7 @@ export default function CommentsPage() {
           type: 'error',
         })
       }
-    } catch (err) {
+    } catch {
       setSyncMessage({
         text: 'Kon comments niet ophalen. Probeer het over een ogenblik opnieuw.',
         type: 'error',
@@ -129,13 +133,6 @@ export default function CommentsPage() {
     c => c.isRepliedByCreator || c.status === 'replied'
   ).length
 
-  const counts = {
-    all: filtered.length,
-    youtube: filtered.filter(c => c.platform === 'youtube').length,
-    instagram: filtered.filter(c => c.platform === 'instagram').length,
-    facebook: filtered.filter(c => c.platform === 'facebook').length,
-  }
-
   return (
     <div className="space-y-6">
       {/* ───────────────────────────────────────────────────────── */}
@@ -149,17 +146,32 @@ export default function CommentsPage() {
               Comments Inbox & Engagement
             </h1>
           </div>
-          <p className="text-stone-400 text-xs flex items-center gap-1.5 mt-0.5">
-            <Clock className="w-3.5 h-3.5 text-stone-500" />
-            {loading ? (
-              'Laden...'
-            ) : (
-              <>
-                <span className="text-amber-400 font-bold">{unrepliedCount}</span> nog te beantwoorden ·{' '}
-                <span className="text-emerald-400 font-bold">{repliedCount}</span> beantwoord
-              </>
+          <div className="text-stone-400 text-xs flex items-center gap-2 mt-1 flex-wrap">
+            <span className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-stone-500" />
+              {loading ? (
+                'Laden...'
+              ) : (
+                <>
+                  <span className="text-amber-400 font-bold">{unrepliedCount}</span> nog te beantwoorden ·{' '}
+                  <span className="text-emerald-400 font-bold">{repliedCount}</span> beantwoord
+                </>
+              )}
+            </span>
+
+            {syncState?.lastSyncAt && (
+              <span className="text-[11px] text-stone-500 bg-stone-950 px-2 py-0.5 rounded border border-stone-800 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Laatste sync:{' '}
+                {syncState.lastSyncAt.toDate
+                  ? syncState.lastSyncAt.toDate().toLocaleTimeString('nl-NL', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : 'Recent'}
+              </span>
             )}
-          </p>
+          </div>
         </div>
 
         {/* Manual Refresh Button */}
@@ -275,70 +287,51 @@ export default function CommentsPage() {
       </div>
 
       {/* ───────────────────────────────────────────────────────── */}
-      {/* LOADING SKELETON                                          */}
+      {/* COMMENT LIST CARDS                                        */}
       {/* ───────────────────────────────────────────────────────── */}
-      {loading && (
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="bg-stone-900 border border-stone-800 rounded-xl h-32 animate-pulse" />
+      {loading ? (
+        <div className="space-y-4">
+          {[1, 2, 3].map(n => (
+            <div
+              key={n}
+              className="bg-stone-900 border border-stone-800 rounded-xl p-6 h-40 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-stone-900 border border-stone-800 rounded-xl p-12 text-center shadow-lg">
+          <CheckCircle2 className="w-12 h-12 text-amber-500/60 mx-auto mb-3" />
+          <h2 className="text-base font-bold text-stone-200 mb-1">
+            {statusTab === 'unreplied'
+              ? 'Alles bijgewerkt!'
+              : 'Geen reacties gevonden in deze weergave'}
+          </h2>
+          <p className="text-stone-500 text-xs max-w-sm mx-auto">
+            {statusTab === 'unreplied'
+              ? 'Er zijn momenteel geen onbeantwoorde reacties. Klik op "Nu Ophalen" om de nieuwste activiteit van YouTube en Instagram op te halen.'
+              : 'Probeer een ander platformfilter of statusfilter te kiezen.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map(comment => (
+            <CommentCard
+              key={comment.id}
+              comment={comment}
+              onReplied={id => {
+                setComments(prev =>
+                  prev.map(c => (c.id === id ? { ...c, status: 'replied' as const, isRepliedByCreator: true } : c))
+                )
+              }}
+              onIgnored={id => {
+                setComments(prev =>
+                  prev.map(c => (c.id === id ? { ...c, status: 'ignored' as const } : c))
+                )
+              }}
+            />
           ))}
         </div>
       )}
-
-      {/* ───────────────────────────────────────────────────────── */}
-      {/* EMPTY STATE                                               */}
-      {/* ───────────────────────────────────────────────────────── */}
-      {!loading && filtered.length === 0 && (
-        <div className="bg-stone-900 border border-stone-800 rounded-xl p-12 text-center shadow-lg">
-          <MessageSquare className="w-10 h-10 text-stone-700 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-stone-300 uppercase tracking-wider mb-1">
-            {statusTab === 'unreplied'
-              ? 'Geen openstaande reacties!'
-              : statusTab === 'replied'
-              ? 'Nog geen beantwoorde reacties'
-              : 'Geen comments gevonden'}
-          </h3>
-          <p className="text-stone-500 text-xs max-w-sm mx-auto mb-4">
-            {statusTab === 'unreplied'
-              ? 'Alle binnengekomen reacties zijn beantwoord of afgehandeld.'
-              : 'Klik hieronder om de nieuwste reacties, likes en antwoorden te synchroniseren.'}
-          </p>
-          <button
-            onClick={handleManualSync}
-            disabled={syncing}
-            className="inline-flex items-center gap-2 bg-stone-800 hover:bg-stone-700 text-amber-400 font-bold px-4 py-2 rounded-lg text-xs tracking-wider uppercase border border-stone-700 hover:border-amber-500 transition-all"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            <span>Nu Synchroniseren</span>
-          </button>
-        </div>
-      )}
-
-      {/* ───────────────────────────────────────────────────────── */}
-      {/* COMMENTS LIST                                             */}
-      {/* ───────────────────────────────────────────────────────── */}
-      <div className="space-y-4">
-        {filtered.map(comment => (
-          <CommentCard
-            key={comment.id}
-            comment={comment}
-            onReplied={id => {
-              setComments(prev =>
-                prev.map(c =>
-                  c.id === id
-                    ? { ...c, status: 'replied', isRepliedByCreator: true }
-                    : c
-                )
-              )
-            }}
-            onIgnored={id => {
-              setComments(prev =>
-                prev.map(c => (c.id === id ? { ...c, status: 'ignored' } : c))
-              )
-            }}
-          />
-        ))}
-      </div>
     </div>
   )
 }

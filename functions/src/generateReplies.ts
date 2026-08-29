@@ -1,23 +1,17 @@
 import { getDb } from './admin'
+import type { PersonaConfigDoc } from './types'
 
-const JACK_SYSTEM_CONTEXT = `You are writing social media replies for Jack Howlin', a modern Outlaw Americana artist.
+const DEFAULT_JACK_CONTEXT = `You are writing social media replies for Jack Howlin', a modern Outlaw Americana artist.
 
 Jack's character: The outlaw who refuses to bow. Judged, rejected, still standing.
-
-Jack's voice rules:
+Voice rules:
 - Short, confident, never apologetic
 - Never tries too hard
 - Max 2 sentences per reply
 - NO exclamation marks unless ironic
 - Understated power, not boastful
 - Never sycophantic ("Thanks!", "That means the world!")
-
-AVOID writing: "Hey guys!", emoji overload, cowboy cosplay ("Howdy!"), pop-country vibe
-
-Examples of Jack's voice:
-"Been riding. Never stopped."
-"Still here. Always have been."
-"They talked. I kept riding."`
+- Avoid: "Hey guys!", emoji overload, cowboy cosplay ("Howdy!"), pop-country vibe`
 
 export async function generateRepliesForComment(commentId: string): Promise<void> {
   const db = getDb()
@@ -32,6 +26,22 @@ export async function generateRepliesForComment(commentId: string): Promise<void
     return
   }
   const comment = commentDoc.data()!
+
+  // Fetch Persona Config from Firestore
+  let personaPrompt = DEFAULT_JACK_CONTEXT
+  try {
+    const personaSnap = await db.collection('settings').doc('persona').get()
+    if (personaSnap.exists) {
+      const pData = personaSnap.data() as PersonaConfigDoc
+      personaPrompt = `You are writing social media replies for ${pData.artistName || "Jack Howlin'"}, a ${pData.genre || 'modern Outlaw Americana'} artist.
+Bio & Atmosphere: ${pData.bio || 'The outlaw who refuses to bow.'}
+Key Rules:
+${(pData.toneGuidelines || []).map(g => `- ${g}`).join('\n')}
+${pData.customInstructions ? `Additional notes: ${pData.customInstructions}` : ''}`
+    }
+  } catch (err) {
+    console.log('[Persona] Using default persona prompt')
+  }
 
   // Get last 20 approved replies for few-shot examples
   const historySnap = await db
@@ -50,8 +60,12 @@ export async function generateRepliesForComment(commentId: string): Promise<void
       ? `\nExamples of replies Jack has approved:\n${examples.join('\n\n')}\n`
       : ''
 
-  const prompt = `${JACK_SYSTEM_CONTEXT}
-${fewShotSection}
+  const fanContext = comment.isSuperfan
+    ? `\nNOTE: This commenter (${comment.author}) is a SUPERFAN who has commented ${comment.fanCommentCount || 2}+ times. Acknowledge them warmly in Jack's understated, loyal style if fitting.`
+    : ''
+
+  const prompt = `${personaPrompt}
+${fewShotSection}${fanContext}
 Generate 3 distinct reply options for this comment. Each reply should be under 20 words. Vary the tone slightly between options. Return ONLY a valid JSON array with exactly 3 strings, no other text: ["reply1", "reply2", "reply3"]
 
 Comment from ${comment.author as string} on "${comment.videoTitle as string}":

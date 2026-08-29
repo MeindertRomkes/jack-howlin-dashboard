@@ -1,7 +1,9 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
+  setDoc,
   query,
   where,
   orderBy,
@@ -12,7 +14,7 @@ import {
   Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { Comment, Post, VoiceHistory } from '@/types'
+import type { Comment, Post, VoiceHistory, SyncState, PersonaConfig, FanProfile, ConnectionHealth } from '@/types'
 
 export async function getNewComments(limitCount = 50): Promise<Comment[]> {
   const q = query(
@@ -25,7 +27,7 @@ export async function getNewComments(limitCount = 50): Promise<Comment[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as Comment))
 }
 
-export async function getAllComments(limitCount = 50): Promise<Comment[]> {
+export async function getAllComments(limitCount = 100): Promise<Comment[]> {
   const q = query(
     collection(db, 'comments'),
     orderBy('publishedAt', 'desc'),
@@ -102,4 +104,97 @@ export async function updatePostStatus(
   if (postedAt) update.postedAt = Timestamp.fromDate(postedAt)
   if (errorMessage) update.errorMessage = errorMessage
   await updateDoc(ref, update)
+}
+
+// ──────────────────────────────────────────────
+// Sync State & System
+// ──────────────────────────────────────────────
+export async function getSyncState(): Promise<SyncState | null> {
+  try {
+    const snap = await getDoc(doc(db, 'system', 'sync_state'))
+    if (snap.exists()) {
+      return snap.data() as SyncState
+    }
+  } catch (err) {
+    console.error('Error fetching sync state:', err)
+  }
+  return null
+}
+
+// ──────────────────────────────────────────────
+// Persona & AI Studio Settings
+// ──────────────────────────────────────────────
+export const DEFAULT_PERSONA_CONFIG: PersonaConfig = {
+  artistName: "Jack Howlin'",
+  genre: 'Outlaw Americana / Dark Country Rock',
+  bio: 'The outlaw who refuses to bow. Built on smoke, gravel, burned roads, whiskey and midnight highway truth.',
+  toneGuidelines: [
+    'Short, confident, never apologetic',
+    'Never tries too hard, understated power',
+    'Max 2 sentences per reply',
+    'No exclamation marks unless ironic',
+    'No emoji overload (maximum 1 emoji like ⚡, 🥃, 🤠)',
+    'Avoid pop-country cosplay ("Howdy!", "Hey y\'all!")',
+  ],
+  smartLinks: {
+    spotify: 'https://open.spotify.com/artist/jackhowlin',
+    youtubeMusic: 'https://music.youtube.com/channel/UC6H_rAkPwGxVwbhn6f86S4Q',
+    appleMusic: '',
+    website: '',
+  },
+  customInstructions: 'Focus on connecting with genuine fans. If someone asks for song titles or full versions, point them to Spotify or YouTube lyric videos.',
+  updatedAt: Timestamp.now(),
+}
+
+export async function getPersonaConfig(): Promise<PersonaConfig> {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'persona'))
+    if (snap.exists()) {
+      return snap.data() as PersonaConfig
+    }
+  } catch (err) {
+    console.error('Error fetching persona config:', err)
+  }
+  return DEFAULT_PERSONA_CONFIG
+}
+
+export async function savePersonaConfig(config: Partial<PersonaConfig>): Promise<void> {
+  const ref = doc(db, 'settings', 'persona')
+  await setDoc(ref, {
+    ...config,
+    updatedAt: serverTimestamp(),
+  }, { merge: true })
+}
+
+// ──────────────────────────────────────────────
+// Connection Health
+// ──────────────────────────────────────────────
+export async function getConnectionHealth(): Promise<ConnectionHealth | null> {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'connections'))
+    if (snap.exists()) {
+      return snap.data() as ConnectionHealth
+    }
+  } catch (err) {
+    console.error('Error fetching connections:', err)
+  }
+  return null
+}
+
+// ──────────────────────────────────────────────
+// Fans CRM
+// ──────────────────────────────────────────────
+export async function getFans(limitCount = 50): Promise<FanProfile[]> {
+  try {
+    const q = query(
+      collection(db, 'fans'),
+      orderBy('commentCount', 'desc'),
+      firestoreLimit(limitCount)
+    )
+    const snap = await getDocs(q)
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as FanProfile))
+  } catch (err) {
+    console.error('Error fetching fans:', err)
+    return []
+  }
 }

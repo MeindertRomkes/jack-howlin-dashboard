@@ -276,7 +276,7 @@ function StatCard({
   href,
   accent,
 }: {
-  icon: (props: { className?: string }) => JSX.Element
+  icon: React.ComponentType<{ className?: string }>
   label: string
   value: string
   sub?: string

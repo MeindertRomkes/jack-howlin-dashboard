@@ -39,8 +39,12 @@ ARTIST PERSONA & VOICE RULES (STRICT):
    - Understated power. Authentic storytelling.
    - Use subtle, fitting emojis sparingly (🔥, 🥃, 🪵, 🎸, 🌙, 🐺, ⚡).
 4. **HASHTAG & KEYWORD INTELLIGENCE (2026 Trends)**:
-   - Combine High-Reach Core Tags (#OutlawCountry, #Americana, #AltCountry) with High-Engagement Niche/Atmospheric Tags (#SouthernGothic, #DarkCountry, #WesternNoir, #WhiskeySongs) and Discovery Tags (#IndependentArtist, #SingerSongwriter, #RootsMusic).
-   - Tailor specifically for Instagram (clean 6-8 tags at bottom), TikTok (punchy searchable tags), YouTube (SEO keyword rich tags list), and Facebook (1-3 impactful tags).
+   - Reference Taxonomy:
+     Core: ${TRENDING_HASHTAG_TAXONOMY.core.join(', ')}
+     Aesthetic: ${TRENDING_HASHTAG_TAXONOMY.aesthetic.join(', ')}
+     Discovery: ${TRENDING_HASHTAG_TAXONOMY.discovery.join(', ')}
+   - Combine High-Reach Core Tags with High-Engagement Niche Tags and Discovery Tags.
+   - Tailor specifically for Instagram, TikTok, YouTube SEO, and Facebook.
 
 USER INPUT / CONTEXT:
 - Post Concept / Prompt: "${prompt || 'Outlaw Americana acoustic guitar track, raw campfire vibes'}"

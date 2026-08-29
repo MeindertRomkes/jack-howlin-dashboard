@@ -1,14 +1,65 @@
 import { getDb } from './admin'
 import { Timestamp } from 'firebase-admin/firestore'
-import type { CommentDoc } from './types'
+import type { CommentDoc, SyncStateDoc, FanProfileDoc } from './types'
+
+// Helper to update Fan Profile in Firestore
+async function updateFanProfile(
+  db: FirebaseFirestore.Firestore,
+  author: string,
+  platform: 'youtube' | 'instagram' | 'facebook' | 'tiktok',
+  authorAvatar: string,
+  commentText: string,
+  commentDate: Date
+): Promise<{ isSuperfan: boolean; commentCount: number }> {
+  try {
+    const fanDocId = `${platform}_${author.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+    const fanRef = db.collection('fans').doc(fanDocId)
+    const fanSnap = await fanRef.get()
+
+    if (fanSnap.exists) {
+      const fanData = fanSnap.data() as FanProfileDoc
+      const count = (fanData.commentCount || 1) + 1
+      const isSuperfan = count >= 2
+      const recentComments = [commentText, ...(fanData.recentComments || [])].slice(0, 5)
+
+      await fanRef.update({
+        commentCount: count,
+        lastCommentAt: Timestamp.fromDate(commentDate),
+        isSuperfan,
+        authorAvatar: authorAvatar || fanData.authorAvatar || '',
+        recentComments,
+      })
+      return { isSuperfan, commentCount: count }
+    } else {
+      const profile: FanProfileDoc = {
+        author,
+        platform,
+        authorAvatar,
+        commentCount: 1,
+        firstCommentAt: Timestamp.fromDate(commentDate),
+        lastCommentAt: Timestamp.fromDate(commentDate),
+        isSuperfan: false,
+        recentComments: [commentText],
+      }
+      await fanRef.set(profile)
+      return { isSuperfan: false, commentCount: 1 }
+    }
+  } catch (err) {
+    console.error(`[Fan CRM] Error updating fan profile for ${author}:`, err)
+    return { isSuperfan: false, commentCount: 1 }
+  }
+}
 
 // ──────────────────────────────────────────────
 // YouTube
 // ──────────────────────────────────────────────
 export async function fetchYouTubeComments(): Promise<void> {
-  try {
-    const db = getDb()
+  const db = getDb()
+  let ytStatus: 'success' | 'error' = 'success'
+  let ytError: string | undefined = undefined
+  let ytCount = 0
 
+  try {
     const clientId = (process.env.YOUTUBE_CLIENT_ID || '').trim()
     const clientSecret = (process.env.YOUTUBE_CLIENT_SECRET || '').trim()
     const redirectUri = (process.env.YOUTUBE_REDIRECT_URI || '').trim()
@@ -38,6 +89,19 @@ export async function fetchYouTubeComments(): Promise<void> {
       console.log('[YouTube] Channel not found')
       return
     }
+
+    // Update connection health
+    await db.collection('settings').doc('connections').set(
+      {
+        youtube: {
+          connected: true,
+          channelTitle,
+          channelId: myChannelId,
+          lastChecked: Timestamp.now(),
+        },
+      },
+      { merge: true }
+    )
 
     // Video metadata cache to avoid redundant API calls
     const videoMetadataCache = new Map<string, { title: string; sourceType: 'video' | 'short' }>()
@@ -109,6 +173,7 @@ export async function fetchYouTubeComments(): Promise<void> {
         const likeCount = topComment.likeCount ?? 0
         const isLikedByCreator = topComment.viewerRating === 'like'
         const replyCount = item.snippet?.totalReplyCount ?? 0
+        const commentDate = new Date(topComment.publishedAt ?? Date.now())
 
         // Check if Jack Howlin' replied to this comment thread
         const threadReplies = item.replies?.comments ?? []
@@ -130,6 +195,16 @@ export async function fetchYouTubeComments(): Promise<void> {
 
         const isRepliedByCreator = creatorRepliesText.length > 0
 
+        // Fan CRM tracking
+        const { isSuperfan, commentCount: fanCount } = await updateFanProfile(
+          db,
+          author,
+          'youtube',
+          topComment.authorProfileImageUrl ?? '',
+          topComment.textDisplay ?? '',
+          commentDate
+        )
+
         const existing = await db
           .collection('comments')
           .where('platformCommentId', '==', platformCommentId)
@@ -137,7 +212,6 @@ export async function fetchYouTubeComments(): Promise<void> {
           .get()
 
         if (!existing.empty) {
-          // Update existing comment's live stats (likes & replied status)
           const docId = existing.docs[0].id
           const existingData = existing.docs[0].data() as CommentDoc
           await db.collection('comments').doc(docId).update({
@@ -149,6 +223,8 @@ export async function fetchYouTubeComments(): Promise<void> {
             sourceUrl,
             sourceType,
             videoTitle,
+            isSuperfan,
+            fanCommentCount: fanCount,
             status: isRepliedByCreator && existingData.status === 'new' ? 'replied' : existingData.status,
             chosenReply: isRepliedByCreator && !existingData.chosenReply ? creatorRepliesText[0] : existingData.chosenReply,
           })
@@ -166,7 +242,7 @@ export async function fetchYouTubeComments(): Promise<void> {
           author,
           authorAvatar: topComment.authorProfileImageUrl ?? '',
           text: topComment.textDisplay ?? '',
-          publishedAt: Timestamp.fromDate(new Date(topComment.publishedAt ?? Date.now())),
+          publishedAt: Timestamp.fromDate(commentDate),
           fetchedAt: Timestamp.now(),
           status: isRepliedByCreator ? 'replied' : 'new',
           generatedReplies: [],
@@ -176,27 +252,40 @@ export async function fetchYouTubeComments(): Promise<void> {
           isRepliedByCreator,
           creatorReplies: creatorRepliesText,
           replyCount,
+          isSuperfan,
+          fanCommentCount: fanCount,
         }
 
         const docRef = await db.collection('comments').add(commentDoc)
         totalProcessed++
-        console.log(`[YouTube] Ingested comment ${docRef.id} from ${commentDoc.author} on "${videoTitle}" (Status: ${commentDoc.status}, Likes: ${likeCount})`)
+        console.log(`[YouTube] Ingested comment ${docRef.id} from ${commentDoc.author} on "${videoTitle}" (Superfan: ${isSuperfan})`)
       }
 
       pageToken = threadsRes.data?.nextPageToken
       if (!pageToken) break
     }
 
+    ytCount = totalProcessed
     console.log(`[YouTube] Total historical comments processed: ${totalProcessed}`)
   } catch (err) {
+    ytStatus = 'error'
+    ytError = err instanceof Error ? err.message : String(err)
     console.error('[YouTube] Comment fetch error:', err)
   }
+
+  // Update Global Sync State in Firestore
+  await updateGlobalSyncState(db, 'youtube', ytStatus, ytCount, ytError)
 }
 
 // ──────────────────────────────────────────────
 // Instagram (Creator API via graph.instagram.com)
 // ──────────────────────────────────────────────
 export async function fetchInstagramComments(): Promise<void> {
+  const db = getDb()
+  let instaStatus: 'success' | 'error' = 'success'
+  let instaError: string | undefined = undefined
+  let instaCount = 0
+
   try {
     const token = (process.env.INSTAGRAM_ACCESS_TOKEN || '').trim()
     const userId = (process.env.INSTAGRAM_USER_ID || '').trim()
@@ -206,8 +295,19 @@ export async function fetchInstagramComments(): Promise<void> {
       return
     }
 
-    const db = getDb()
     const BASE = 'https://graph.instagram.com/v21.0'
+
+    // Update connection health
+    await db.collection('settings').doc('connections').set(
+      {
+        instagram: {
+          connected: true,
+          username: 'jack_howlin_official',
+          lastChecked: Timestamp.now(),
+        },
+      },
+      { merge: true }
+    )
 
     // Get recent media (last 25 posts)
     const mediaRes = await fetch(
@@ -223,7 +323,6 @@ export async function fetchInstagramComments(): Promise<void> {
       const sourceUrl = media.permalink || `https://www.instagram.com/p/${media.id}`
       const postTitle = media.caption ? media.caption.substring(0, 75) + '...' : 'Instagram Post'
 
-      // Fetch comments on this post
       const commentsRes = await fetch(
         `${BASE}/${media.id}/comments?fields=id,text,username,like_count,timestamp,replies{id,text,username}&limit=50&access_token=${token}`
       )
@@ -240,6 +339,16 @@ export async function fetchInstagramComments(): Promise<void> {
           .filter(r => r.username?.toLowerCase() === 'jack_howlin_official')
           .map(r => r.text)
         const isRepliedByCreator = creatorReplies.length > 0
+        const commentDate = new Date(comment.timestamp)
+
+        const { isSuperfan, commentCount: fanCount } = await updateFanProfile(
+          db,
+          `@${comment.username}`,
+          'instagram',
+          '',
+          comment.text,
+          commentDate
+        )
 
         const existing = await db
           .collection('comments')
@@ -257,9 +366,12 @@ export async function fetchInstagramComments(): Promise<void> {
             replyCount: replies.length,
             sourceUrl,
             sourceType,
+            isSuperfan,
+            fanCommentCount: fanCount,
             status: isRepliedByCreator && existingData.status === 'new' ? 'replied' : existingData.status,
             chosenReply: isRepliedByCreator && !existingData.chosenReply ? creatorReplies[0] : existingData.chosenReply,
           })
+          instaCount++
           continue
         }
 
@@ -273,7 +385,7 @@ export async function fetchInstagramComments(): Promise<void> {
           author: `@${comment.username}`,
           authorAvatar: '',
           text: comment.text,
-          publishedAt: Timestamp.fromDate(new Date(comment.timestamp)),
+          publishedAt: Timestamp.fromDate(commentDate),
           fetchedAt: Timestamp.now(),
           status: isRepliedByCreator ? 'replied' : 'new',
           generatedReplies: [],
@@ -283,21 +395,33 @@ export async function fetchInstagramComments(): Promise<void> {
           isRepliedByCreator,
           creatorReplies,
           replyCount: replies.length,
+          isSuperfan,
+          fanCommentCount: fanCount,
         }
 
         const docRef = await db.collection('comments').add(commentDoc)
+        instaCount++
         console.log(`[Instagram] Saved comment ${docRef.id} from @${comment.username}`)
       }
     }
   } catch (err) {
+    instaStatus = 'error'
+    instaError = err instanceof Error ? err.message : String(err)
     console.error('[Instagram] Comment fetch error:', err)
   }
+
+  await updateGlobalSyncState(db, 'instagram', instaStatus, instaCount, instaError)
 }
 
 // ──────────────────────────────────────────────
 // Facebook Page
 // ──────────────────────────────────────────────
 export async function fetchFacebookComments(): Promise<void> {
+  const db = getDb()
+  let fbStatus: 'success' | 'error' = 'success'
+  let fbError: string | undefined = undefined
+  let fbCount = 0
+
   try {
     const token = (process.env.FACEBOOK_PAGE_ACCESS_TOKEN || '').trim()
     const pageId = (process.env.FACEBOOK_PAGE_ID || '').trim()
@@ -307,8 +431,19 @@ export async function fetchFacebookComments(): Promise<void> {
       return
     }
 
-    const db = getDb()
     const BASE = 'https://graph.facebook.com/v19.0'
+
+    // Update connection health
+    await db.collection('settings').doc('connections').set(
+      {
+        facebook: {
+          connected: true,
+          pageName: "Jack Howlin'",
+          lastChecked: Timestamp.now(),
+        },
+      },
+      { merge: true }
+    )
 
     // Get last 25 Page posts
     const postsRes = await fetch(
@@ -322,7 +457,6 @@ export async function fetchFacebookComments(): Promise<void> {
       const postTitle = post.message ? post.message.substring(0, 75) + '...' : 'Facebook Post'
       const sourceUrl = post.permalink_url || `https://www.facebook.com/${post.id}`
 
-      // Fetch comments on this post
       const commentsRes = await fetch(
         `${BASE}/${post.id}/comments?fields=id,message,from,like_count,created_time,comments{id,message,from}&limit=50&access_token=${token}`
       )
@@ -339,6 +473,16 @@ export async function fetchFacebookComments(): Promise<void> {
           .filter(r => r.from?.id === pageId || r.from?.name?.toLowerCase() === 'jack howlin\'')
           .map(r => r.message)
         const isRepliedByCreator = creatorReplies.length > 0
+        const commentDate = new Date(comment.created_time)
+
+        const { isSuperfan, commentCount: fanCount } = await updateFanProfile(
+          db,
+          comment.from?.name ?? 'Facebook User',
+          'facebook',
+          '',
+          comment.message,
+          commentDate
+        )
 
         const existing = await db
           .collection('comments')
@@ -356,9 +500,12 @@ export async function fetchFacebookComments(): Promise<void> {
             replyCount: subComments.length,
             sourceUrl,
             sourceType: 'post',
+            isSuperfan,
+            fanCommentCount: fanCount,
             status: isRepliedByCreator && existingData.status === 'new' ? 'replied' : existingData.status,
             chosenReply: isRepliedByCreator && !existingData.chosenReply ? creatorReplies[0] : existingData.chosenReply,
           })
+          fbCount++
           continue
         }
 
@@ -372,7 +519,7 @@ export async function fetchFacebookComments(): Promise<void> {
           author: comment.from?.name ?? 'Facebook User',
           authorAvatar: '',
           text: comment.message,
-          publishedAt: Timestamp.fromDate(new Date(comment.created_time)),
+          publishedAt: Timestamp.fromDate(commentDate),
           fetchedAt: Timestamp.now(),
           status: isRepliedByCreator ? 'replied' : 'new',
           generatedReplies: [],
@@ -382,13 +529,71 @@ export async function fetchFacebookComments(): Promise<void> {
           isRepliedByCreator,
           creatorReplies,
           replyCount: subComments.length,
+          isSuperfan,
+          fanCommentCount: fanCount,
         }
 
         const docRef = await db.collection('comments').add(commentDoc)
+        fbCount++
         console.log(`[Facebook] Saved comment ${docRef.id} from ${comment.from?.name}`)
       }
     }
   } catch (err) {
+    fbStatus = 'error'
+    fbError = err instanceof Error ? err.message : String(err)
     console.error('[Facebook] Comment fetch error:', err)
+  }
+
+  await updateGlobalSyncState(db, 'facebook', fbStatus, fbCount, fbError)
+}
+
+// ──────────────────────────────────────────────
+// Global Sync State Aggregator
+// ──────────────────────────────────────────────
+async function updateGlobalSyncState(
+  db: FirebaseFirestore.Firestore,
+  platform: 'youtube' | 'instagram' | 'facebook' | 'tiktok',
+  status: 'success' | 'error',
+  count: number,
+  error?: string
+): Promise<void> {
+  try {
+    const allCommentsSnap = await db.collection('comments').get()
+    const totalCommentsCount = allCommentsSnap.size
+    let unrepliedCount = 0
+    let repliedCount = 0
+
+    allCommentsSnap.forEach(doc => {
+      const d = doc.data() as CommentDoc
+      if (d.status === 'new' && !d.isRepliedByCreator) {
+        unrepliedCount++
+      } else if (d.status === 'replied' || d.isRepliedByCreator) {
+        repliedCount++
+      }
+    })
+
+    const syncStateRef = db.collection('system').doc('sync_state')
+    const updateData: Partial<SyncStateDoc> = {
+      lastSyncAt: Timestamp.now(),
+      lastSyncStatus: status,
+      totalCommentsCount,
+      unrepliedCount,
+      repliedCount,
+    }
+
+    const platformUpdate: Record<string, any> = {
+      ...updateData,
+      [`platforms.${platform}`]: {
+        lastSyncAt: Timestamp.now(),
+        status,
+        totalCount: count,
+        ...(error ? { error } : {}),
+      },
+    }
+
+    await syncStateRef.set(platformUpdate, { merge: true })
+    console.log(`[Sync State] Updated system/sync_state -> Total: ${totalCommentsCount}, Unreplied: ${unrepliedCount}, Replied: ${repliedCount}`)
+  } catch (err) {
+    console.error('[Sync State] Error updating sync state:', err)
   }
 }

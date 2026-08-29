@@ -17,6 +17,7 @@ import {
   ThumbsUp,
   CheckCircle2,
   CornerDownRight,
+  Star,
 } from 'lucide-react'
 
 interface CommentCardProps {
@@ -222,6 +223,14 @@ export default function CommentCard({
                 <span className="flex items-center gap-1 text-[11px] text-stone-400 bg-stone-950 px-2 py-0.5 rounded border border-stone-800">
                   <ThumbsUp className="w-3 h-3 text-amber-400" />
                   {comment.likeCount}
+                </span>
+              )}
+
+              {/* Superfan Badge */}
+              {comment.isSuperfan && (
+                <span className="flex items-center gap-1 text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/60 px-2 py-0.5 rounded uppercase tracking-wider shadow-sm">
+                  <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                  Superfan ({comment.fanCommentCount || 2} reacties)
                 </span>
               )}
 
