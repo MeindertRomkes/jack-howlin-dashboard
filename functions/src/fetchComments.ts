@@ -278,7 +278,7 @@ export async function fetchYouTubeComments(): Promise<void> {
 }
 
 // ──────────────────────────────────────────────
-// Instagram (Creator API via graph.instagram.com)
+// Instagram (via Meta Graph API / Connected Page)
 // ──────────────────────────────────────────────
 export async function fetchInstagramComments(): Promise<void> {
   const db = getDb()
@@ -287,15 +287,24 @@ export async function fetchInstagramComments(): Promise<void> {
   let instaCount = 0
 
   try {
-    const token = (process.env.INSTAGRAM_ACCESS_TOKEN || '').trim()
-    const userId = (process.env.INSTAGRAM_USER_ID || '').trim()
+    const pageToken = (process.env.FACEBOOK_PAGE_ACCESS_TOKEN || '').trim()
+    const rawIgToken = (process.env.INSTAGRAM_ACCESS_TOKEN || '').trim()
+    const rawIgUserId = (process.env.INSTAGRAM_USER_ID || '').trim()
 
-    if (!token || token === 'placeholder' || !userId || userId === 'placeholder') {
-      console.log('[Instagram] Credentials not configured, skipping')
-      return
+    // Determine which token and IG account ID to use
+    let token = pageToken
+    let igAccountId = '17841477945569204' // Connected IG Business ID for Jack Howlin'
+    let graphBase = 'https://graph.facebook.com/v21.0'
+
+    if (!token || token === 'placeholder') {
+      if (!rawIgToken || rawIgToken === 'placeholder') {
+        console.log('[Instagram] Credentials not configured, skipping')
+        return
+      }
+      token = rawIgToken
+      igAccountId = rawIgUserId || 'me'
+      graphBase = 'https://graph.instagram.com/v21.0'
     }
-
-    const BASE = 'https://graph.instagram.com/v21.0'
 
     // Update connection health
     await db.collection('settings').doc('connections').set(
@@ -309,25 +318,39 @@ export async function fetchInstagramComments(): Promise<void> {
       { merge: true }
     )
 
-    // Get recent media (last 25 posts)
+    // Get all media (up to 100 items)
     const mediaRes = await fetch(
-      `${BASE}/${userId}/media?fields=id,caption,media_type,permalink,timestamp&limit=25&access_token=${token}`
+      `${graphBase}/${igAccountId}/media?fields=id,caption,media_type,permalink,timestamp,comments_count,like_count&limit=100&access_token=${token}`
     )
     const mediaData = (await mediaRes.json()) as {
-      data?: { id: string; caption?: string; media_type: string; permalink?: string; timestamp: string }[]
+      data?: { id: string; caption?: string; media_type: string; permalink?: string; timestamp: string; comments_count?: number; like_count?: number }[]
+      error?: { message: string }
+    }
+
+    if (mediaData.error) {
+      throw new Error(mediaData.error.message)
     }
 
     for (const media of mediaData.data ?? []) {
+      if (media.comments_count === 0) continue
+
       const isReel = media.media_type === 'VIDEO'
       const sourceType = isReel ? 'reel' : 'post'
       const sourceUrl = media.permalink || `https://www.instagram.com/p/${media.id}`
-      const postTitle = media.caption ? media.caption.substring(0, 75) + '...' : 'Instagram Post'
+      const postTitle = media.caption ? media.caption.substring(0, 75) + '...' : 'Instagram Reel'
 
       const commentsRes = await fetch(
-        `${BASE}/${media.id}/comments?fields=id,text,username,like_count,timestamp,replies{id,text,username}&limit=50&access_token=${token}`
+        `${graphBase}/${media.id}/comments?fields=id,text,username,like_count,timestamp,from,replies{id,text,username,from}&limit=50&access_token=${token}`
       )
       const commentsData = (await commentsRes.json()) as {
-        data?: { id: string; text: string; username: string; like_count?: number; timestamp: string; replies?: { data: { id: string; text: string; username: string }[] } }[]
+        data?: {
+          id: string
+          text: string
+          username: string
+          like_count?: number
+          timestamp: string
+          replies?: { data: { id: string; text: string; username: string }[] }
+        }[]
       }
 
       for (const comment of commentsData.data ?? []) {
