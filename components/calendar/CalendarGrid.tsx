@@ -15,7 +15,35 @@ interface CalendarGridProps {
   month: number
 }
 
-export default function CalendarGrid({ posts, year, month }: CalendarGridProps) {
+// Robust helper to parse Firestore Timestamp / String / Object into JavaScript Date
+function parsePostDate(scheduledAt: unknown): Date | null {
+  if (!scheduledAt) return null
+  if (scheduledAt instanceof Date) return scheduledAt
+  if (scheduledAt instanceof Timestamp) return scheduledAt.toDate()
+  if (
+    typeof scheduledAt === 'object' &&
+    scheduledAt !== null &&
+    'toDate' in scheduledAt &&
+    typeof (scheduledAt as { toDate: () => Date }).toDate === 'function'
+  ) {
+    return (scheduledAt as { toDate: () => Date }).toDate()
+  }
+  if (
+    typeof scheduledAt === 'object' &&
+    scheduledAt !== null &&
+    'seconds' in scheduledAt &&
+    typeof (scheduledAt as { seconds: number }).seconds === 'number'
+  ) {
+    return new Date((scheduledAt as { seconds: number }).seconds * 1000)
+  }
+  if (typeof scheduledAt === 'string' || typeof scheduledAt === 'number') {
+    const d = new Date(scheduledAt)
+    return isNaN(d.getTime()) ? null : d
+  }
+  return null
+}
+
+export default function CalendarGrid({ posts = [], year, month }: CalendarGridProps) {
   const firstDayOfWeek = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   // Monday-first: Sunday (0) becomes 6, Mon-Sat become 0-5
@@ -23,11 +51,8 @@ export default function CalendarGrid({ posts, year, month }: CalendarGridProps) 
 
   const postsByDay: Record<number, Post[]> = {}
   for (const post of posts) {
-    if (!post.scheduledAt) continue
-    const d =
-      post.scheduledAt instanceof Timestamp
-        ? post.scheduledAt.toDate()
-        : new Date(post.scheduledAt as string)
+    const d = parsePostDate(post.scheduledAt)
+    if (!d) continue
 
     if (d.getFullYear() === year && d.getMonth() === month) {
       const day = d.getDate()
@@ -69,7 +94,7 @@ export default function CalendarGrid({ posts, year, month }: CalendarGridProps) 
           return (
             <div
               key={i}
-              className={`min-h-[105px] p-2 border-b border-r last:border-r-0 border-stone-800 transition-colors ${
+              className={`min-h-[115px] p-2 border-b border-r last:border-r-0 border-stone-800 transition-colors ${
                 day !== null ? 'bg-stone-900/60 hover:bg-stone-900/90' : 'bg-stone-950/30'
               }`}
             >
@@ -92,29 +117,48 @@ export default function CalendarGrid({ posts, year, month }: CalendarGridProps) 
                     ) : null}
                   </div>
 
-                  <div className="space-y-1">
-                    {(postsByDay[day] ?? []).map((post, j) => (
-                      <div
-                        key={j}
-                        className="text-[11px] bg-stone-950 border border-stone-800/80 p-1.5 rounded-lg shadow-sm group hover:border-stone-700 transition-all"
-                      >
-                        <div className="flex items-center gap-1 mb-1">
-                          {post.platforms.map(p => (
-                            <span
-                              key={p}
-                              className={`text-[9px] px-1 py-0.2 rounded font-bold uppercase border ${
-                                PLATFORM_COLORS[p] ?? 'bg-stone-800 text-stone-400'
-                              }`}
-                            >
-                              {p.slice(0, 2)}
-                            </span>
-                          ))}
+                  <div className="space-y-1.5">
+                    {(postsByDay[day] ?? []).map((post, j) => {
+                      const platformList = Array.isArray(post.platforms) && post.platforms.length > 0
+                        ? post.platforms
+                        : post.platform
+                        ? [post.platform]
+                        : ['youtube']
+
+                      return (
+                        <div
+                          key={post.id || j}
+                          className="text-[11px] bg-stone-950 border border-stone-800/80 p-1.5 rounded-lg shadow-sm group hover:border-stone-700 transition-all"
+                        >
+                          <div className="flex items-center gap-1 mb-1 flex-wrap">
+                            {platformList.map(p => (
+                              <span
+                                key={p}
+                                className={`text-[9px] px-1 py-0.2 rounded font-bold uppercase border ${
+                                  PLATFORM_COLORS[p] ?? 'bg-stone-800 text-stone-400 border-stone-700'
+                                }`}
+                              >
+                                {p.slice(0, 2)}
+                              </span>
+                            ))}
+                            {post.status && (
+                              <span className={`text-[8px] px-1 rounded uppercase font-extrabold ${
+                                post.status === 'posted'
+                                  ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/60'
+                                  : post.status === 'failed'
+                                  ? 'bg-red-950 text-red-400 border border-red-800/60'
+                                  : 'bg-amber-950 text-amber-400 border border-amber-800/60'
+                              }`}>
+                                {post.status}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-stone-300 truncate font-medium">
+                            {post.title || post.caption || 'Ingeplande post'}
+                          </p>
                         </div>
-                        <p className="text-stone-300 truncate font-medium">
-                          {post.title || post.caption || 'Ingeplande post'}
-                        </p>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </>
               )}

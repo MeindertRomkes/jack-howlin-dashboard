@@ -74,13 +74,23 @@ export async function saveChosenReply(
 }
 
 export async function getScheduledPosts(): Promise<Post[]> {
-  const q = query(
-    collection(db, 'posts'),
-    where('status', 'in', ['scheduled', 'draft']),
-    orderBy('scheduledAt', 'asc')
-  )
-  const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Post))
+  try {
+    const q = query(
+      collection(db, 'posts'),
+      orderBy('scheduledAt', 'asc')
+    )
+    const snap = await getDocs(q)
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Post))
+  } catch (err) {
+    console.warn('Fallback: Querying posts collection without orderBy:', err)
+    try {
+      const snap = await getDocs(collection(db, 'posts'))
+      return snap.docs.map(d => ({ id: d.id, ...d.data() } as Post))
+    } catch (e2) {
+      console.error('Error fetching posts:', e2)
+      return []
+    }
+  }
 }
 
 export async function savePost(
