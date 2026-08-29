@@ -121,8 +121,6 @@ export default function CalendarGrid({ posts = [], year, month }: CalendarGridPr
                     {(postsByDay[day] ?? []).map((post, j) => {
                       const platformList = Array.isArray(post.platforms) && post.platforms.length > 0
                         ? post.platforms
-                        : post.platform
-                        ? [post.platform]
                         : ['youtube']
 
                       return (
