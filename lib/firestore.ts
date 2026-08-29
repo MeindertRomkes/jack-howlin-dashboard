@@ -208,3 +208,70 @@ export async function getFans(limitCount = 50): Promise<FanProfile[]> {
     return []
   }
 }
+
+// ──────────────────────────────────────────────
+// Data Intelligence & Analytics Snapshots
+// ──────────────────────────────────────────────
+import type { AnalyticsSnapshot, IntelligenceReport } from '@/types'
+
+export async function getLatestAnalyticsSnapshot(): Promise<AnalyticsSnapshot | null> {
+  try {
+    const q = query(
+      collection(db, 'analytics_snapshots'),
+      orderBy('timestamp', 'desc'),
+      firestoreLimit(1)
+    )
+    const snap = await getDocs(q)
+    if (!snap.empty) {
+      const d = snap.docs[0]
+      return { id: d.id, ...d.data() } as AnalyticsSnapshot
+    }
+  } catch (err) {
+    console.error('Error fetching latest analytics snapshot:', err)
+  }
+  return null
+}
+
+export async function getAnalyticsHistory(limitCount = 14): Promise<AnalyticsSnapshot[]> {
+  try {
+    const q = query(
+      collection(db, 'analytics_snapshots'),
+      orderBy('timestamp', 'desc'),
+      firestoreLimit(limitCount)
+    )
+    const snap = await getDocs(q)
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as AnalyticsSnapshot))
+  } catch (err) {
+    console.error('Error fetching analytics history:', err)
+    return []
+  }
+}
+
+export async function saveAnalyticsSnapshot(snapshot: Omit<AnalyticsSnapshot, 'id'>): Promise<string> {
+  const ref = await addDoc(collection(db, 'analytics_snapshots'), {
+    ...snapshot,
+    timestamp: serverTimestamp(),
+  })
+  return ref.id
+}
+
+export async function getLatestIntelligenceReport(): Promise<IntelligenceReport | null> {
+  try {
+    const snap = await getDoc(doc(db, 'system', 'intelligence_report'))
+    if (snap.exists()) {
+      return { id: snap.id, ...snap.data() } as IntelligenceReport
+    }
+  } catch (err) {
+    console.error('Error fetching intelligence report:', err)
+  }
+  return null
+}
+
+export async function saveIntelligenceReport(report: Omit<IntelligenceReport, 'id'>): Promise<void> {
+  const ref = doc(db, 'system', 'intelligence_report')
+  await setDoc(ref, {
+    ...report,
+    generatedAt: serverTimestamp(),
+  }, { merge: true })
+}
+

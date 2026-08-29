@@ -111,3 +111,31 @@ export const refreshTokensScheduled = onSchedule(
     await refreshInstagramToken()
   }
 )
+
+// ── Analytics & Intelligence: daily at 04:00 ──────────────
+import { aggregateAndStoreAnalytics } from './fetchAnalytics'
+
+export const fetchAnalyticsScheduled = onSchedule(
+  {
+    schedule: '0 4 * * *',
+    region: 'europe-west1',
+    secrets: [...COMMENTS_SECRETS, 'GEMINI_API_KEY'],
+  },
+  async () => {
+    console.log('Running daily analytics snapshot & intelligence analysis...')
+    await aggregateAndStoreAnalytics()
+  }
+)
+
+// HTTP trigger for manual testing
+export const fetchAnalyticsHttp = onRequest(
+  {
+    region: 'europe-west1',
+    secrets: [...COMMENTS_SECRETS, 'GEMINI_API_KEY'],
+  },
+  async (req, res) => {
+    await aggregateAndStoreAnalytics()
+    res.json({ success: true })
+  }
+)
+

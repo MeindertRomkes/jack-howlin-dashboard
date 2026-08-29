@@ -96,3 +96,103 @@ export interface ConnectionHealth {
   facebook: { connected: boolean; pageName?: string; lastChecked?: Timestamp }
   tiktok: { connected: boolean; status: string; lastChecked?: Timestamp }
 }
+
+export interface TrackPerformance {
+  trackId: string
+  title: string
+  album?: string
+  releaseDate?: string
+  spotifyUrl?: string
+  popularity: number // 0-100 score from Spotify API
+  estimatedStreams?: number
+  weeklyGrowthPercent?: number
+  topPlatformHook?: string
+  keyLyricLine?: string
+}
+
+export interface PlatformMetricOverview {
+  totalViews?: number
+  videoCount?: number
+  shortsViews?: number
+  longformViews?: number
+  avgWatchPercentage?: number
+  totalComments?: number
+  totalLikes?: number
+  followers?: number
+  reach?: number
+  shares?: number
+  saves?: number
+  engagementRate?: number
+}
+
+export interface AnalyticsSnapshot {
+  id?: string
+  timestamp: Timestamp
+  period: 'daily' | 'weekly' | 'manual'
+  totalCrossPlatformViews: number
+  totalCommentsCount: number
+  youtube: PlatformMetricOverview & {
+    channelTitle?: string
+    topVideos?: Array<{
+      videoId: string
+      title: string
+      views: number
+      likes: number
+      comments: number
+      isShort?: boolean
+      retentionScore?: number
+    }>
+  }
+  spotify: {
+    artistName: string
+    monthlyListeners: number
+    followers: number
+    topTracks: TrackPerformance[]
+  }
+  instagram: PlatformMetricOverview
+  tiktok: PlatformMetricOverview
+  facebook?: PlatformMetricOverview
+}
+
+export interface ActionablePlaybookItem {
+  id: string
+  type: 'song_release' | 'merch_push' | 'lyric_short' | 'fan_reengage'
+  title: string
+  targetTrack?: string
+  reason: string
+  recommendedHook: string
+  suggestedPlatforms: Platform[]
+  priority: 'high' | 'medium' | 'low'
+  actionPayload?: {
+    caption?: string
+    suggestedFormat?: string
+    smartLink?: string
+  }
+}
+
+export interface IntelligenceReport {
+  id?: string
+  generatedAt: Timestamp
+  summary: string
+  winningHooks: Array<{
+    hookTitle: string
+    description: string
+    effectivenessMultiplier: string
+    exampleScene: string
+  }>
+  contentFatigueAlerts: string[]
+  bestPostingWindows: Array<{
+    platform: Platform
+    bestDay: string
+    bestTime: string
+    reason: string
+  }>
+  trackMomentumRadar: Array<{
+    trackTitle: string
+    momentumStatus: 'surging' | 'steady' | 'needs_boost'
+    growthNote: string
+    actionRecommendation: string
+  }>
+  actionablePlaybooks: ActionablePlaybookItem[]
+}
+
