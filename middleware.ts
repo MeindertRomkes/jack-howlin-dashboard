@@ -21,6 +21,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // In local development, allow access seamlessly
+  if (process.env.NODE_ENV === 'development' || request.nextUrl.hostname === 'localhost') {
+    return NextResponse.next()
+  }
+
   if (!session) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })

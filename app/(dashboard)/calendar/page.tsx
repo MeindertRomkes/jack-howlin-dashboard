@@ -4,8 +4,9 @@ import { getScheduledPosts } from '@/lib/firestore'
 import CalendarGrid from '@/components/calendar/CalendarGrid'
 import PostModal from '@/components/calendar/PostModal'
 import ReleaseCampaignModal from '@/components/calendar/ReleaseCampaignModal'
+import MerchBatchModal from '@/components/merch/MerchBatchModal'
 import type { Post } from '@/types'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles, Flame } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Flame, ShoppingBag, Plus } from 'lucide-react'
 
 const MONTHS = [
   'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
@@ -19,6 +20,7 @@ export default function CalendarPage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [showModal, setShowModal] = useState(false)
   const [showCampaignModal, setShowCampaignModal] = useState(false)
+  const [showMerchModal, setShowMerchModal] = useState(false)
 
   async function loadPosts() {
     const loaded = await getScheduledPosts()
@@ -85,13 +87,22 @@ export default function CalendarPage() {
             </button>
           </div>
 
+          {/* Merch Batch Machine Button */}
+          <button
+            onClick={() => setShowMerchModal(true)}
+            className="bg-stone-950 border border-amber-500/40 hover:bg-amber-500/10 text-amber-300 font-bold px-3.5 py-2.5 rounded-lg text-xs tracking-wider uppercase transition-all flex items-center gap-2 shadow-sm"
+          >
+            <ShoppingBag className="w-4 h-4 text-amber-400" />
+            <span>Merch AI Batch</span>
+          </button>
+
           {/* Release Campaign Planner Button */}
           <button
             onClick={() => setShowCampaignModal(true)}
             className="bg-stone-950 border border-amber-500/50 hover:bg-amber-500/10 text-amber-400 font-bold px-3.5 py-2.5 rounded-lg text-xs tracking-wider uppercase transition-all flex items-center gap-2 shadow-sm"
           >
             <Flame className="w-4 h-4 text-amber-500" />
-            <span>7-Dagen Release Planner</span>
+            <span>Song Launchpad (14-Dagen)</span>
           </button>
 
           {/* New Post Button */}
@@ -99,31 +110,45 @@ export default function CalendarPage() {
             onClick={() => setShowModal(true)}
             className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold px-4 py-2.5 rounded-lg text-xs tracking-wider uppercase transition-all shadow-md hover:shadow-amber-500/20 flex items-center gap-2"
           >
-            <Sparkles className="w-4 h-4" />
+            <Plus className="w-4 h-4" />
             <span>Nieuwe Post</span>
           </button>
         </div>
       </div>
 
       {/* Calendar Grid */}
-      <CalendarGrid posts={posts} year={year} month={month} />
+      <div className="bg-stone-900 border border-stone-800 rounded-xl p-5 shadow-lg">
+        <CalendarGrid year={year} month={month} posts={posts} />
+      </div>
 
-      {/* Release Campaign Modal */}
-      <ReleaseCampaignModal
-        isOpen={showCampaignModal}
-        onClose={() => setShowCampaignModal(false)}
-        onSaved={() => {
-          setShowCampaignModal(false)
-          loadPosts().catch(console.error)
-        }}
-      />
-
-      {/* Post Modal */}
+      {/* Modals */}
       {showModal && (
         <PostModal
           onClose={() => setShowModal(false)}
           onSaved={() => {
             setShowModal(false)
+            loadPosts().catch(console.error)
+          }}
+        />
+      )}
+
+      {showCampaignModal && (
+        <ReleaseCampaignModal
+          isOpen={showCampaignModal}
+          onClose={() => setShowCampaignModal(false)}
+          onSaved={() => {
+            setShowCampaignModal(false)
+            loadPosts().catch(console.error)
+          }}
+        />
+      )}
+
+      {showMerchModal && (
+        <MerchBatchModal
+          isOpen={showMerchModal}
+          onClose={() => setShowMerchModal(false)}
+          onSuccess={() => {
+            setShowMerchModal(false)
             loadPosts().catch(console.error)
           }}
         />
