@@ -1,6 +1,7 @@
 'use client'
 import type { Post } from '@/types'
 import { Timestamp } from 'firebase/firestore'
+import { Clapperboard } from 'lucide-react'
 
 const PLATFORM_COLORS: Record<string, string> = {
   youtube: 'bg-red-500/20 text-red-300 border-red-500/30',
@@ -13,6 +14,7 @@ interface CalendarGridProps {
   posts: Post[]
   year: number
   month: number
+  onGenerateVisual?: (postId: string) => void
 }
 
 // Robust helper to parse Firestore Timestamp / String / Object into JavaScript Date
@@ -43,7 +45,7 @@ function parsePostDate(scheduledAt: unknown): Date | null {
   return null
 }
 
-export default function CalendarGrid({ posts = [], year, month }: CalendarGridProps) {
+export default function CalendarGrid({ posts = [], year, month, onGenerateVisual }: CalendarGridProps) {
   const firstDayOfWeek = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   // Monday-first: Sunday (0) becomes 6, Mon-Sat become 0-5
@@ -154,6 +156,15 @@ export default function CalendarGrid({ posts = [], year, month }: CalendarGridPr
                           <p className="text-stone-300 truncate font-medium">
                             {post.title || post.caption || 'Ingeplande post'}
                           </p>
+                          {onGenerateVisual && post.id && (
+                            <button
+                              onClick={() => onGenerateVisual(post.id!)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-amber-600/10 border border-amber-500/30 text-amber-400 hover:bg-amber-600/20 transition-colors mt-1.5 w-full"
+                            >
+                              <Clapperboard className="w-3.5 h-3.5" />
+                              Visual genereren
+                            </button>
+                          )}
                         </div>
                       )
                     })}

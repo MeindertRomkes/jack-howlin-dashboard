@@ -1,10 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { getScheduledPosts } from '@/lib/firestore'
+import { db } from '@/lib/firebase'
+import { updateDoc, doc } from 'firebase/firestore'
 import CalendarGrid from '@/components/calendar/CalendarGrid'
 import PostModal from '@/components/calendar/PostModal'
 import ReleaseCampaignModal from '@/components/calendar/ReleaseCampaignModal'
 import MerchBatchModal from '@/components/merch/MerchBatchModal'
+import GenerateModal from '@/components/studio/GenerateModal'
 import type { Post } from '@/types'
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Flame, ShoppingBag, Plus } from 'lucide-react'
 
@@ -21,6 +24,7 @@ export default function CalendarPage() {
   const [showModal, setShowModal] = useState(false)
   const [showCampaignModal, setShowCampaignModal] = useState(false)
   const [showMerchModal, setShowMerchModal] = useState(false)
+  const [generateModalPostId, setGenerateModalPostId] = useState<string | null>(null)
 
   async function loadPosts() {
     const loaded = await getScheduledPosts()
@@ -118,7 +122,7 @@ export default function CalendarPage() {
 
       {/* Calendar Grid */}
       <div className="bg-stone-900 border border-stone-800 rounded-xl p-5 shadow-lg">
-        <CalendarGrid year={year} month={month} posts={posts} />
+        <CalendarGrid year={year} month={month} posts={posts} onGenerateVisual={setGenerateModalPostId} />
       </div>
 
       {/* Modals */}
@@ -153,6 +157,22 @@ export default function CalendarPage() {
           }}
         />
       )}
+
+      {generateModalPostId && (() => {
+        const post = posts.find(p => p.id === generateModalPostId)
+        return (
+          <GenerateModal
+            isOpen={true}
+            postId={generateModalPostId}
+            caption={post?.caption ?? ''}
+            onClose={() => setGenerateModalPostId(null)}
+            onAssetSelected={(url, type) => {
+              updateDoc(doc(db, 'posts', generateModalPostId), { mediaUrl: url, mediaType: type })
+              setGenerateModalPostId(null)
+            }}
+          />
+        )
+      })()}
     </div>
   )
 }
