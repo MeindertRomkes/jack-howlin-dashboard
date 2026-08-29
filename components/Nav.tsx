@@ -2,13 +2,14 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from '@/lib/auth'
-import { LayoutDashboard, MessageSquare, Calendar, Sliders, LogOut, Flame, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, MessageSquare, Calendar, Sliders, LogOut, Flame, BarChart3, Clapperboard } from 'lucide-react'
 
 const links = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/analytics', label: 'Data & Intel', icon: BarChart3 },
   { href: '/comments', label: 'Comments', icon: MessageSquare },
   { href: '/calendar', label: 'Kalender & Posts', icon: Calendar },
+  { href: '/studio', label: 'Studio', icon: Clapperboard },
   { href: '/settings', label: 'AI Persona & Studio', icon: Sliders },
 ]
 
