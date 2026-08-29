@@ -27,142 +27,167 @@ export async function fetchYouTubeComments(): Promise<void> {
 
     const channelRes = await youtube.channels.list({
       auth: oauth2Client,
-      part: ['id', 'contentDetails', 'snippet'],
+      part: ['id', 'snippet'],
       mine: true,
     })
 
     const myChannelId = channelRes.data.items?.[0]?.id ?? ''
     const channelTitle = channelRes.data.items?.[0]?.snippet?.title ?? "Jack Howlin'"
-    const uploadsPlaylistId =
-      channelRes.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads
-    if (!uploadsPlaylistId) {
-      console.log('[YouTube] No uploads playlist found')
+
+    if (!myChannelId) {
+      console.log('[YouTube] Channel not found')
       return
     }
 
-    const videosRes = await youtube.playlistItems.list({
-      auth: oauth2Client,
-      part: ['snippet'],
-      playlistId: uploadsPlaylistId,
-      maxResults: 25,
-    })
+    // Video metadata cache to avoid redundant API calls
+    const videoMetadataCache = new Map<string, { title: string; sourceType: 'video' | 'short' }>()
 
-    for (const video of videosRes.data.items ?? []) {
-      const videoId = video.snippet?.resourceId?.videoId
-      const videoTitle = video.snippet?.title ?? 'Untitled Video'
-      const description = video.snippet?.description ?? ''
-      if (!videoId) continue
-
-      const isShort =
-        videoTitle.toLowerCase().includes('#short') ||
-        description.toLowerCase().includes('#short') ||
-        videoTitle.includes('#music')
-
-      const sourceType = isShort ? 'short' : 'video'
-      const sourceUrl = `https://www.youtube.com/watch?v=${videoId}`
-
+    async function getVideoMetadata(videoId: string): Promise<{ title: string; sourceType: 'video' | 'short' }> {
+      if (videoMetadataCache.has(videoId)) {
+        return videoMetadataCache.get(videoId)!
+      }
       try {
-        const commentsRes = await youtube.commentThreads.list({
+        const vRes = await youtube.videos.list({
           auth: oauth2Client,
-          part: ['snippet', 'replies'],
-          videoId,
-          maxResults: 50,
-          order: 'time',
+          part: ['snippet'],
+          id: [videoId],
         })
+        const item = vRes.data.items?.[0]
+        const title = item?.snippet?.title ?? 'YouTube Video'
+        const desc = item?.snippet?.description ?? ''
+        const isShort =
+          title.toLowerCase().includes('#short') ||
+          desc.toLowerCase().includes('#short') ||
+          title.includes('#music')
+        const meta = { title, sourceType: isShort ? ('short' as const) : ('video' as const) }
+        videoMetadataCache.set(videoId, meta)
+        return meta
+      } catch {
+        const fallback = { title: 'YouTube Video', sourceType: 'video' as const }
+        videoMetadataCache.set(videoId, fallback)
+        return fallback
+      }
+    }
 
-        for (const item of commentsRes.data.items ?? []) {
-          const topComment = item.snippet?.topLevelComment?.snippet
-          if (!topComment) continue
+    // Fetch ALL comment threads related to the channel with pagination
+    let pageToken: string | undefined = undefined
+    let totalProcessed = 0
 
-          const author = topComment.authorDisplayName ?? 'Unknown'
-          // Filter out top-level comments posted by the artist himself
+    while (true) {
+      const threadsRes: any = await youtube.commentThreads.list({
+        auth: oauth2Client,
+        part: ['snippet', 'replies'],
+        allThreadsRelatedToChannelId: myChannelId,
+        maxResults: 100,
+        pageToken,
+      })
+
+      const items = threadsRes.data.items ?? []
+
+      for (const item of items) {
+        const topComment = item.snippet?.topLevelComment?.snippet
+        if (!topComment) continue
+
+        const author = topComment.authorDisplayName ?? 'Unknown'
+        // Filter out top-level comments posted by the artist himself
+        if (
+          author.toLowerCase() === '@jackhowlin' ||
+          author.toLowerCase() === 'jack howlin\'' ||
+          author.toLowerCase() === channelTitle.toLowerCase() ||
+          topComment.authorChannelId?.value === myChannelId
+        ) {
+          continue
+        }
+
+        const platformCommentId = item.id!
+        const videoId = item.snippet?.videoId ?? ''
+        const { title: videoTitle, sourceType } = videoId
+          ? await getVideoMetadata(videoId)
+          : { title: 'Channel Comment', sourceType: 'video' as const }
+
+        const sourceUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : `https://www.youtube.com/channel/${myChannelId}`
+        const likeCount = topComment.likeCount ?? 0
+        const isLikedByCreator = topComment.viewerRating === 'like'
+        const replyCount = item.snippet?.totalReplyCount ?? 0
+
+        // Check if Jack Howlin' replied to this comment thread
+        const threadReplies = item.replies?.comments ?? []
+        const creatorRepliesText: string[] = []
+        for (const reply of threadReplies) {
+          const rSnippet = reply.snippet
+          if (!rSnippet) continue
+          const rAuthor = rSnippet.authorDisplayName ?? ''
+          const rChannelId = rSnippet.authorChannelId?.value ?? ''
           if (
-            author.toLowerCase() === '@jackhowlin' ||
-            author.toLowerCase() === 'jack howlin\'' ||
-            author.toLowerCase() === channelTitle.toLowerCase()
+            rChannelId === myChannelId ||
+            rAuthor.toLowerCase() === channelTitle.toLowerCase() ||
+            rAuthor.toLowerCase() === '@jackhowlin' ||
+            rAuthor.toLowerCase() === 'jack howlin\''
           ) {
-            continue
+            if (rSnippet.textDisplay) creatorRepliesText.push(rSnippet.textDisplay)
           }
+        }
 
-          const platformCommentId = item.id!
-          const likeCount = topComment.likeCount ?? 0
-          const isLikedByCreator = topComment.viewerRating === 'like'
-          const replyCount = item.snippet?.totalReplyCount ?? 0
+        const isRepliedByCreator = creatorRepliesText.length > 0
 
-          // Check if Jack Howlin' replied to this comment thread
-          const threadReplies = item.replies?.comments ?? []
-          const creatorRepliesText: string[] = []
-          for (const reply of threadReplies) {
-            const rSnippet = reply.snippet
-            if (!rSnippet) continue
-            const rAuthor = rSnippet.authorDisplayName ?? ''
-            const rChannelId = rSnippet.authorChannelId?.value ?? ''
-            if (
-              rChannelId === myChannelId ||
-              rAuthor.toLowerCase() === channelTitle.toLowerCase() ||
-              rAuthor.toLowerCase() === '@jackhowlin' ||
-              rAuthor.toLowerCase() === 'jack howlin\''
-            ) {
-              if (rSnippet.textDisplay) creatorRepliesText.push(rSnippet.textDisplay)
-            }
-          }
+        const existing = await db
+          .collection('comments')
+          .where('platformCommentId', '==', platformCommentId)
+          .limit(1)
+          .get()
 
-          const isRepliedByCreator = creatorRepliesText.length > 0
-
-          const existing = await db
-            .collection('comments')
-            .where('platformCommentId', '==', platformCommentId)
-            .limit(1)
-            .get()
-
-          if (!existing.empty) {
-            // Update existing comment's live stats (likes & replied status)
-            const docId = existing.docs[0].id
-            const existingData = existing.docs[0].data() as CommentDoc
-            await db.collection('comments').doc(docId).update({
-              likeCount,
-              isLikedByCreator,
-              isRepliedByCreator,
-              creatorReplies: creatorRepliesText,
-              replyCount,
-              sourceUrl,
-              sourceType,
-              // If Jack already replied natively on YouTube, mark as replied if it was new
-              status: isRepliedByCreator && existingData.status === 'new' ? 'replied' : existingData.status,
-              chosenReply: isRepliedByCreator && !existingData.chosenReply ? creatorRepliesText[0] : existingData.chosenReply,
-            })
-            continue
-          }
-
-          const commentDoc: CommentDoc = {
-            platform: 'youtube',
-            platformCommentId,
-            videoId,
-            videoTitle,
-            sourceUrl,
-            sourceType,
-            author,
-            authorAvatar: topComment.authorProfileImageUrl ?? '',
-            text: topComment.textDisplay ?? '',
-            publishedAt: Timestamp.fromDate(new Date(topComment.publishedAt ?? Date.now())),
-            fetchedAt: Timestamp.now(),
-            status: isRepliedByCreator ? 'replied' : 'new',
-            generatedReplies: [],
-            chosenReply: isRepliedByCreator ? creatorRepliesText[0] : null,
+        if (!existing.empty) {
+          // Update existing comment's live stats (likes & replied status)
+          const docId = existing.docs[0].id
+          const existingData = existing.docs[0].data() as CommentDoc
+          await db.collection('comments').doc(docId).update({
             likeCount,
             isLikedByCreator,
             isRepliedByCreator,
             creatorReplies: creatorRepliesText,
             replyCount,
-          }
-
-          const docRef = await db.collection('comments').add(commentDoc)
-          console.log(`[YouTube] Saved comment ${docRef.id} from ${commentDoc.author} on "${videoTitle}" (Likes: ${likeCount}, Liked: ${isLikedByCreator}, Replied: ${isRepliedByCreator})`)
+            sourceUrl,
+            sourceType,
+            videoTitle,
+            status: isRepliedByCreator && existingData.status === 'new' ? 'replied' : existingData.status,
+            chosenReply: isRepliedByCreator && !existingData.chosenReply ? creatorRepliesText[0] : existingData.chosenReply,
+          })
+          totalProcessed++
+          continue
         }
-      } catch (err) {
-        console.log(`[YouTube] No comments or error on video ${videoId}:`, err instanceof Error ? err.message : err)
+
+        const commentDoc: CommentDoc = {
+          platform: 'youtube',
+          platformCommentId,
+          videoId,
+          videoTitle,
+          sourceUrl,
+          sourceType,
+          author,
+          authorAvatar: topComment.authorProfileImageUrl ?? '',
+          text: topComment.textDisplay ?? '',
+          publishedAt: Timestamp.fromDate(new Date(topComment.publishedAt ?? Date.now())),
+          fetchedAt: Timestamp.now(),
+          status: isRepliedByCreator ? 'replied' : 'new',
+          generatedReplies: [],
+          chosenReply: isRepliedByCreator ? creatorRepliesText[0] : null,
+          likeCount,
+          isLikedByCreator,
+          isRepliedByCreator,
+          creatorReplies: creatorRepliesText,
+          replyCount,
+        }
+
+        const docRef = await db.collection('comments').add(commentDoc)
+        totalProcessed++
+        console.log(`[YouTube] Ingested comment ${docRef.id} from ${commentDoc.author} on "${videoTitle}" (Status: ${commentDoc.status}, Likes: ${likeCount})`)
       }
+
+      pageToken = threadsRes.data?.nextPageToken
+      if (!pageToken) break
     }
+
+    console.log(`[YouTube] Total historical comments processed: ${totalProcessed}`)
   } catch (err) {
     console.error('[YouTube] Comment fetch error:', err)
   }
@@ -184,9 +209,9 @@ export async function fetchInstagramComments(): Promise<void> {
     const db = getDb()
     const BASE = 'https://graph.instagram.com/v21.0'
 
-    // Get recent media (last 15 posts)
+    // Get recent media (last 25 posts)
     const mediaRes = await fetch(
-      `${BASE}/${userId}/media?fields=id,caption,media_type,permalink,timestamp&limit=15&access_token=${token}`
+      `${BASE}/${userId}/media?fields=id,caption,media_type,permalink,timestamp&limit=25&access_token=${token}`
     )
     const mediaData = (await mediaRes.json()) as {
       data?: { id: string; caption?: string; media_type: string; permalink?: string; timestamp: string }[]
@@ -285,9 +310,9 @@ export async function fetchFacebookComments(): Promise<void> {
     const db = getDb()
     const BASE = 'https://graph.facebook.com/v19.0'
 
-    // Get last 15 Page posts
+    // Get last 25 Page posts
     const postsRes = await fetch(
-      `${BASE}/${pageId}/posts?fields=id,message,permalink_url,created_time&limit=15&access_token=${token}`
+      `${BASE}/${pageId}/posts?fields=id,message,permalink_url,created_time&limit=25&access_token=${token}`
     )
     const postsData = (await postsRes.json()) as {
       data?: { id: string; message?: string; permalink_url?: string; created_time: string }[]

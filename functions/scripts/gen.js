@@ -2,61 +2,57 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
+const path = require('path');
 
-let geminiKey = process.env.GEMINI_API_KEY;
-if (!geminiKey) {
-  const envContent = fs.readFileSync('../.env.local', 'utf8');
-  geminiKey = envContent.match(/GEMINI_API_KEY=([^\r\n]+)/)?.[1]?.trim();
+let envPath = path.resolve(__dirname, '../../.env.local');
+if (!fs.existsSync(envPath)) {
+  envPath = path.resolve(__dirname, '../.env.local');
 }
+if (!fs.existsSync(envPath)) {
+  envPath = path.resolve('.env.local');
+}
+
+const envContent = fs.readFileSync(envPath, 'utf8');
+const getEnv = (key) => envContent.match(new RegExp(key + '=([^\\r\\n]+)'))?.[1]?.trim();
+
+const GEMINI_API_KEY = getEnv('GEMINI_API_KEY');
 
 initializeApp({ projectId: 'jack-howlin-dashboard' });
 const db = getFirestore();
 
-const JACK_SYSTEM_CONTEXT = `You are writing social media replies for Jack Howlin', a modern Outlaw Americana artist.
-Jack's character: The outlaw who refuses to bow. Judged, rejected, still standing.
-Jack's voice rules:
-- Short, confident, never apologetic
-- Never tries too hard
-- Max 2 sentences per reply
-- NO exclamation marks unless ironic
-- Understated power, not boastful
-- Never sycophantic ("Thanks!", "That means the world!")
-- Keep replies in English, or matching fan energy
-
-AVOID writing: "Hey guys!", emoji overload, cowboy cosplay ("Howdy!"), pop-country vibe
-Examples: "Been riding. Never stopped.", "Still here. Always have been.", "They talked. I kept riding."`;
-
-async function gen() {
-  const genAI = new GoogleGenerativeAI(geminiKey);
+async function run() {
+  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
+
   const snap = await db.collection('comments').where('status', '==', 'new').get();
-  console.log(`Found ${snap.size} new comments`);
+  console.log(`Generating replies for ${snap.size} unreplied comments...`);
+
   for (const doc of snap.docs) {
     const data = doc.data();
-    if (data.generatedReplies && data.generatedReplies.length > 0) {
-      console.log(`Already has replies: ${data.author}`);
-      continue;
-    }
-    const prompt = `${JACK_SYSTEM_CONTEXT}
+    const prompt = `You are Jack Howlin', an Outlaw Americana musician.
+Generate 3 distinct, authentic reply options to this YouTube fan comment:
+Video: "${data.videoTitle}"
+Fan: "${data.author}"
+Comment: "${data.text}"
 
-A fan left this comment on YouTube on the ${data.sourceType || 'video'} "${data.videoTitle}":
-"${data.text}"
-
-Generate exactly 3 distinct reply options from Jack Howlin'.
-Return ONLY a valid JSON array of 3 strings: ["reply 1", "reply 2", "reply 3"]. No other text.`;
+Rules:
+- Authentic outlaw country tone: grounded, appreciative, concise.
+- Never use emojis excessively (maximum 1).
+- Reply in JSON array format: ["option 1", "option 2", "option 3"]`;
 
     try {
       const res = await model.generateContent(prompt);
-      const text = res.response.text().trim();
-      const match = text.match(/\[[\s\S]*\]/);
-      if (match) {
-        const replies = JSON.parse(match[0]);
-        await doc.ref.update({ generatedReplies: replies });
-        console.log('✅ Generated replies for', data.author, ':', replies);
-      }
-    } catch(e) {
-      console.error('Error on', doc.id, e.message);
+      const text = res.response.text();
+      console.log('Gemini raw text:', text);
+      const clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const replies = JSON.parse(clean);
+      await db.collection('comments').doc(doc.id).update({
+        generatedReplies: replies
+      });
+      console.log(`Generated replies for ${data.author}:`, replies);
+    } catch (e) {
+      console.error(`Error generating for ${data.author}:`, e.message);
     }
   }
 }
-gen();
+run();
