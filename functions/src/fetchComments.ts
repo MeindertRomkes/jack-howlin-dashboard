@@ -2,6 +2,22 @@ import { getDb } from './admin'
 import { Timestamp } from 'firebase-admin/firestore'
 import type { CommentDoc, SyncStateDoc, FanProfileDoc } from './types'
 
+function decodeHtml(str?: string | null): string {
+  if (!str) return ''
+  return str
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#34;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+}
+
 // Helper to update Fan Profile in Firestore
 async function updateFanProfile(
   db: FirebaseFirestore.Firestore,
@@ -189,11 +205,14 @@ export async function fetchYouTubeComments(): Promise<void> {
             rAuthor.toLowerCase() === '@jackhowlin' ||
             rAuthor.toLowerCase() === 'jack howlin\''
           ) {
-            if (rSnippet.textDisplay) creatorRepliesText.push(rSnippet.textDisplay)
+            if (rSnippet.textOriginal || rSnippet.textDisplay) {
+              creatorRepliesText.push(decodeHtml(rSnippet.textOriginal || rSnippet.textDisplay))
+            }
           }
         }
 
         const isRepliedByCreator = creatorRepliesText.length > 0
+        const rawCommentText = decodeHtml(topComment.textOriginal || topComment.textDisplay || '')
 
         // Fan CRM tracking
         const { isSuperfan, commentCount: fanCount } = await updateFanProfile(
@@ -201,7 +220,7 @@ export async function fetchYouTubeComments(): Promise<void> {
           author,
           'youtube',
           topComment.authorProfileImageUrl ?? '',
-          topComment.textDisplay ?? '',
+          rawCommentText,
           commentDate
         )
 
@@ -222,7 +241,8 @@ export async function fetchYouTubeComments(): Promise<void> {
             replyCount,
             sourceUrl,
             sourceType,
-            videoTitle,
+            videoTitle: decodeHtml(videoTitle),
+            text: rawCommentText,
             isSuperfan,
             fanCommentCount: fanCount,
             status: isRepliedByCreator && existingData.status === 'new' ? 'replied' : existingData.status,
@@ -236,12 +256,12 @@ export async function fetchYouTubeComments(): Promise<void> {
           platform: 'youtube',
           platformCommentId,
           videoId,
-          videoTitle,
+          videoTitle: decodeHtml(videoTitle),
           sourceUrl,
           sourceType,
           author,
           authorAvatar: topComment.authorProfileImageUrl ?? '',
-          text: topComment.textDisplay ?? '',
+          text: rawCommentText,
           publishedAt: Timestamp.fromDate(commentDate),
           fetchedAt: Timestamp.now(),
           status: isRepliedByCreator ? 'replied' : 'new',

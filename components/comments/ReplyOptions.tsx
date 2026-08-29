@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
 
+import { decodeHtmlEntities } from '@/lib/utils'
+
 interface ReplyOptionsProps {
   generatedReplies: string[]
   onSelect: (reply: string) => void
@@ -17,9 +19,10 @@ export default function ReplyOptions({
   const [useCustom, setUseCustom] = useState(false)
 
   function handleSelect(reply: string) {
-    setSelected(reply)
+    const cleaned = decodeHtmlEntities(reply)
+    setSelected(cleaned)
     setUseCustom(false)
-    onSelect(reply)
+    onSelect(cleaned)
   }
 
   function handleCustomChange(val: string) {
@@ -31,20 +34,23 @@ export default function ReplyOptions({
 
   return (
     <div className="space-y-2 mt-3">
-      {generatedReplies.map((reply, i) => (
-        <button
-          key={i}
-          onClick={() => handleSelect(reply)}
-          disabled={disabled}
-          className={`w-full text-left px-4 py-3 border text-sm transition-colors ${
-            selected === reply
-              ? 'border-amber-500 bg-amber-950 text-amber-100'
-              : 'border-stone-700 bg-stone-800 text-stone-300 hover:border-stone-500'
-          }`}
-        >
-          {reply}
-        </button>
-      ))}
+      {generatedReplies.map((reply, i) => {
+        const cleaned = decodeHtmlEntities(reply)
+        return (
+          <button
+            key={i}
+            onClick={() => handleSelect(cleaned)}
+            disabled={disabled}
+            className={`w-full text-left px-4 py-3 border text-sm transition-colors rounded-lg ${
+              selected === cleaned
+                ? 'border-amber-500 bg-amber-950/80 text-amber-100'
+                : 'border-stone-800 bg-stone-950/80 text-stone-300 hover:border-stone-700'
+            }`}
+          >
+            {cleaned}
+          </button>
+        )
+      })}
       <div
         className={`border px-4 py-2 transition-colors ${
           useCustom

@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import ReplyOptions from './ReplyOptions'
 import type { Comment, Platform } from '@/types'
+import { decodeHtmlEntities } from '@/lib/utils'
 import {
   Send,
   EyeOff,
@@ -208,7 +209,7 @@ export default function CommentCard({
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {getContentTypeBadge()}
           <span className="text-xs font-semibold text-stone-300 truncate" title={comment.videoTitle}>
-            {comment.videoTitle || 'Onbekende video/post'}
+            {decodeHtmlEntities(comment.videoTitle) || 'Onbekende video/post'}
           </span>
         </div>
 
@@ -297,7 +298,7 @@ export default function CommentCard({
             {/* Comment Body */}
             <div className="bg-stone-950/60 border border-stone-800/80 rounded-xl p-3.5">
               <p className="text-stone-200 text-sm leading-relaxed whitespace-pre-wrap">
-                {comment.text}
+                {decodeHtmlEntities(comment.text)}
               </p>
             </div>
 
@@ -309,7 +310,7 @@ export default function CommentCard({
                   <span>Geplaatst antwoord van Jack Howlin&apos;:</span>
                 </div>
                 <p className="text-stone-300 text-xs italic leading-relaxed">
-                  &ldquo;{creatorReplyText}&rdquo;
+                  &ldquo;{decodeHtmlEntities(creatorReplyText)}&rdquo;
                 </p>
               </div>
             )}
