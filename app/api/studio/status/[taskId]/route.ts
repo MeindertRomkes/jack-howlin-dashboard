@@ -8,10 +8,13 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { taskId: string } }
 ): Promise<NextResponse> {
+  const isDev = process.env.NODE_ENV === 'development'
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  try { await adminAuth.verifyIdToken(token) } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isDev) {
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    try { await adminAuth.verifyIdToken(token) } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
   }
 
   const status = await getKieTaskStatus(params.taskId)
