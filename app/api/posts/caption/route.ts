@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
 
     const prompt = `You are writing social media captions for Jack Howlin', a modern Outlaw Americana artist.
 Jack's tone: short, confident, never apologetic, never tries too hard. No exclamation marks. Max 3 sentences.

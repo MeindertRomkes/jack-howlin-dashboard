@@ -6,6 +6,8 @@ export interface CommentDoc {
   platformCommentId: string
   videoId: string
   videoTitle: string
+  sourceUrl?: string
+  sourceType?: 'video' | 'short' | 'reel' | 'post'
   author: string
   authorAvatar: string
   text: string

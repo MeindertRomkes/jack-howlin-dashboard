@@ -1,17 +1,19 @@
-import { SecretManagerServiceClient } from '@google-cloud/secret-manager'
-
-const PROJECT_ID = 'jack-howlin-dashboard'
-
-// Lazy-initialized to avoid credential fetch at module load time
-let _secretClient: SecretManagerServiceClient | null = null
-function getSecretClient(): SecretManagerServiceClient {
-  if (!_secretClient) _secretClient = new SecretManagerServiceClient()
+// Lazy-loaded to avoid module initialization timeout
+let _secretClient: any = null
+async function getSecretClient(): Promise<any> {
+  if (!_secretClient) {
+    const { SecretManagerServiceClient } = await import('@google-cloud/secret-manager')
+    _secretClient = new SecretManagerServiceClient()
+  }
   return _secretClient
 }
 
+const PROJECT_ID = 'jack-howlin-dashboard'
+
 async function updateSecret(secretName: string, newValue: string): Promise<void> {
   const parent = `projects/${PROJECT_ID}/secrets/${secretName}`
-  await getSecretClient().addSecretVersion({
+  const client = await getSecretClient()
+  await client.addSecretVersion({
     parent,
     payload: { data: Buffer.from(newValue, 'utf8') },
   })

@@ -1,5 +1,4 @@
 import { getDb } from './admin'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const JACK_SYSTEM_CONTEXT = `You are writing social media replies for Jack Howlin', a modern Outlaw Americana artist.
 
@@ -22,8 +21,9 @@ Examples of Jack's voice:
 
 export async function generateRepliesForComment(commentId: string): Promise<void> {
   const db = getDb()
+  const { GoogleGenerativeAI } = await import('@google/generative-ai')
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
 
   // Get the comment document
   const commentDoc = await db.collection('comments').doc(commentId).get()

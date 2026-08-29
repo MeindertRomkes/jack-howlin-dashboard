@@ -1,4 +1,3 @@
-import { google } from 'googleapis'
 import { Readable } from 'stream'
 
 interface YouTubePostResult {
@@ -11,13 +10,14 @@ export async function postToYouTube(
   description: string,
   tags: string[]
 ): Promise<YouTubePostResult> {
+  const { google } = await import('googleapis')
   const oauth2Client = new google.auth.OAuth2(
-    process.env.YOUTUBE_CLIENT_ID,
-    process.env.YOUTUBE_CLIENT_SECRET,
-    process.env.YOUTUBE_REDIRECT_URI
+    (process.env.YOUTUBE_CLIENT_ID || '').trim(),
+    (process.env.YOUTUBE_CLIENT_SECRET || '').trim(),
+    (process.env.YOUTUBE_REDIRECT_URI || '').trim()
   )
   oauth2Client.setCredentials({
-    refresh_token: process.env.YOUTUBE_REFRESH_TOKEN,
+    refresh_token: (process.env.YOUTUBE_REFRESH_TOKEN || '').trim(),
   })
 
   const youtube = google.youtube({ version: 'v3', auth: oauth2Client })
