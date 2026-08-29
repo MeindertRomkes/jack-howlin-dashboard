@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { getNewComments } from '@/lib/firestore'
+import { getAllComments } from '@/lib/firestore'
 import CommentCard from '@/components/comments/CommentCard'
 import type { Comment, Platform } from '@/types'
 import {
@@ -10,6 +10,9 @@ import {
   AlertCircle,
   Clock,
   Filter,
+  Inbox,
+  CheckCheck,
+  ListFilter,
 } from 'lucide-react'
 
 // Authentic brand vector icons
@@ -46,16 +49,19 @@ const PLATFORM_FILTERS: { key: Platform | 'all'; label: string }[] = [
   { key: 'facebook', label: 'Facebook' },
 ]
 
+type StatusTab = 'unreplied' | 'replied' | 'all'
+
 export default function CommentsPage() {
   const [comments, setComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
-  const [filter, setFilter] = useState<Platform | 'all'>('all')
+  const [platformFilter, setPlatformFilter] = useState<Platform | 'all'>('all')
+  const [statusTab, setStatusTab] = useState<StatusTab>('unreplied')
 
   async function loadComments() {
     try {
-      const data = await getNewComments(100)
+      const data = await getAllComments(100)
       setComments(data)
     } catch (err) {
       console.error('Error fetching comments:', err)
@@ -81,7 +87,7 @@ export default function CommentsPage() {
 
       if (res.ok) {
         setSyncMessage({
-          text: '✅ Nieuwste comments succesvol opgehaald van YouTube, Instagram & Facebook!',
+          text: '✅ Nieuwste comments, likes & antwoorden succesvol gesynchroniseerd!',
           type: 'success',
         })
       } else {
@@ -101,29 +107,58 @@ export default function CommentsPage() {
     }
   }
 
-  const filtered = filter === 'all' ? comments : comments.filter(c => c.platform === filter)
+  // Filter logic
+  const filteredByPlatform =
+    platformFilter === 'all'
+      ? comments
+      : comments.filter(c => c.platform === platformFilter)
+
+  const filtered = filteredByPlatform.filter(c => {
+    const isReplied = c.isRepliedByCreator || c.status === 'replied'
+    if (statusTab === 'unreplied') return !isReplied && c.status !== 'ignored'
+    if (statusTab === 'replied') return isReplied
+    return c.status !== 'ignored' // 'all' tab
+  })
+
+  // Counters
+  const unrepliedCount = comments.filter(
+    c => !c.isRepliedByCreator && c.status === 'new'
+  ).length
+
+  const repliedCount = comments.filter(
+    c => c.isRepliedByCreator || c.status === 'replied'
+  ).length
 
   const counts = {
-    all: comments.length,
-    youtube: comments.filter(c => c.platform === 'youtube').length,
-    instagram: comments.filter(c => c.platform === 'instagram').length,
-    facebook: comments.filter(c => c.platform === 'facebook').length,
+    all: filtered.length,
+    youtube: filtered.filter(c => c.platform === 'youtube').length,
+    instagram: filtered.filter(c => c.platform === 'instagram').length,
+    facebook: filtered.filter(c => c.platform === 'facebook').length,
   }
 
   return (
     <div className="space-y-6">
-      {/* Header section */}
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* HEADER SECTION                                            */}
+      {/* ───────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-stone-900 border border-stone-800 p-5 rounded-xl shadow-lg">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <MessageSquare className="w-5 h-5 text-amber-500" />
             <h1 className="text-xl font-extrabold tracking-wider uppercase text-stone-100">
-              Comments Inbox
+              Comments Inbox & Engagement
             </h1>
           </div>
           <p className="text-stone-400 text-xs flex items-center gap-1.5 mt-0.5">
             <Clock className="w-3.5 h-3.5 text-stone-500" />
-            {loading ? 'Laden...' : `${comments.length} nieuwe reacties te beantwoorden`} · Automatisch elke 30 min
+            {loading ? (
+              'Laden...'
+            ) : (
+              <>
+                <span className="text-amber-400 font-bold">{unrepliedCount}</span> nog te beantwoorden ·{' '}
+                <span className="text-emerald-400 font-bold">{repliedCount}</span> beantwoord
+              </>
+            )}
           </p>
         </div>
 
@@ -156,61 +191,117 @@ export default function CommentsPage() {
         </div>
       )}
 
-      {/* Platform filter tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-stone-800">
-        <div className="flex items-center gap-1 text-stone-500 text-xs uppercase font-bold mr-2">
-          <Filter className="w-3.5 h-3.5" /> Filter:
-        </div>
-
-        {PLATFORM_FILTERS.map(({ key, label }) => {
-          const Icon = PLATFORM_ICONS[key]
-          const isSelected = filter === key
-          const count = counts[key as keyof typeof counts] ?? 0
-
-          return (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold tracking-wider uppercase border transition-all ${
-                isSelected
-                  ? 'bg-amber-950/50 border-amber-500 text-amber-300 shadow-sm'
-                  : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200 hover:border-stone-700'
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* STATUS TABS (Te Beantwoorden vs Al Beantwoord vs Alles)   */}
+      {/* ───────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3 border-b border-stone-800 pb-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setStatusTab('unreplied')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border ${
+              statusTab === 'unreplied'
+                ? 'bg-amber-500 text-stone-950 border-amber-400 shadow-md'
+                : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+            }`}
+          >
+            <Inbox className="w-3.5 h-3.5" />
+            <span>Te Beantwoorden</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                statusTab === 'unreplied' ? 'bg-stone-950 text-amber-400' : 'bg-stone-800 text-stone-300'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{label}</span>
-              {count > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                    isSelected ? 'bg-amber-500 text-stone-950' : 'bg-stone-800 text-stone-400'
-                  }`}
-                >
-                  {count}
-                </span>
-              )}
-            </button>
-          )
-        })}
+              {unrepliedCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setStatusTab('replied')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border ${
+              statusTab === 'replied'
+                ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
+                : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+            }`}
+          >
+            <CheckCheck className="w-3.5 h-3.5" />
+            <span>Al Beantwoord</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                statusTab === 'replied' ? 'bg-emerald-950 text-emerald-300' : 'bg-stone-800 text-stone-300'
+              }`}
+            >
+              {repliedCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setStatusTab('all')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border ${
+              statusTab === 'all'
+                ? 'bg-stone-700 text-stone-100 border-stone-600 shadow-md'
+                : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+            }`}
+          >
+            <ListFilter className="w-3.5 h-3.5" />
+            <span>Alle Reacties</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full font-extrabold bg-stone-800 text-stone-300">
+              {comments.filter(c => c.status !== 'ignored').length}
+            </span>
+          </button>
+        </div>
+
+        {/* Platform filter tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto">
+          {PLATFORM_FILTERS.map(({ key, label }) => {
+            const Icon = PLATFORM_ICONS[key]
+            const isSelected = platformFilter === key
+
+            return (
+              <button
+                key={key}
+                onClick={() => setPlatformFilter(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wider uppercase border transition-all ${
+                  isSelected
+                    ? 'bg-stone-800 border-amber-500 text-amber-300 shadow-sm'
+                    : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200 hover:border-stone-700'
+                }`}
+              >
+                <Icon className="w-3 h-3" />
+                <span>{label}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Loading Skeleton */}
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* LOADING SKELETON                                          */}
+      {/* ───────────────────────────────────────────────────────── */}
       {loading && (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="bg-stone-900 border border-stone-800 rounded-xl h-28 animate-pulse" />
+            <div key={i} className="bg-stone-900 border border-stone-800 rounded-xl h-32 animate-pulse" />
           ))}
         </div>
       )}
 
-      {/* Empty State */}
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* EMPTY STATE                                               */}
+      {/* ───────────────────────────────────────────────────────── */}
       {!loading && filtered.length === 0 && (
         <div className="bg-stone-900 border border-stone-800 rounded-xl p-12 text-center shadow-lg">
           <MessageSquare className="w-10 h-10 text-stone-700 mx-auto mb-3" />
           <h3 className="text-base font-bold text-stone-300 uppercase tracking-wider mb-1">
-            Geen nieuwe comments
+            {statusTab === 'unreplied'
+              ? 'Geen openstaande reacties!'
+              : statusTab === 'replied'
+              ? 'Nog geen beantwoorde reacties'
+              : 'Geen comments gevonden'}
           </h3>
           <p className="text-stone-500 text-xs max-w-sm mx-auto mb-4">
-            Alle reacties zijn beantwoord of genegeerd. Klik op de knop hieronder om direct de nieuwste reacties van YouTube, Instagram en Facebook op te halen.
+            {statusTab === 'unreplied'
+              ? 'Alle binnengekomen reacties zijn beantwoord of afgehandeld.'
+              : 'Klik hieronder om de nieuwste reacties, likes en antwoorden te synchroniseren.'}
           </p>
           <button
             onClick={handleManualSync}
@@ -218,19 +309,33 @@ export default function CommentsPage() {
             className="inline-flex items-center gap-2 bg-stone-800 hover:bg-stone-700 text-amber-400 font-bold px-4 py-2 rounded-lg text-xs tracking-wider uppercase border border-stone-700 hover:border-amber-500 transition-all"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            <span>Nu Controleren</span>
+            <span>Nu Synchroniseren</span>
           </button>
         </div>
       )}
 
-      {/* Comments List */}
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* COMMENTS LIST                                             */}
+      {/* ───────────────────────────────────────────────────────── */}
       <div className="space-y-4">
         {filtered.map(comment => (
           <CommentCard
             key={comment.id}
             comment={comment}
-            onReplied={id => setComments(prev => prev.filter(c => c.id !== id))}
-            onIgnored={id => setComments(prev => prev.filter(c => c.id !== id))}
+            onReplied={id => {
+              setComments(prev =>
+                prev.map(c =>
+                  c.id === id
+                    ? { ...c, status: 'replied', isRepliedByCreator: true }
+                    : c
+                )
+              )
+            }}
+            onIgnored={id => {
+              setComments(prev =>
+                prev.map(c => (c.id === id ? { ...c, status: 'ignored' } : c))
+              )
+            }}
           />
         ))}
       </div>

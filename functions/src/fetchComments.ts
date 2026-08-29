@@ -27,10 +27,11 @@ export async function fetchYouTubeComments(): Promise<void> {
 
     const channelRes = await youtube.channels.list({
       auth: oauth2Client,
-      part: ['contentDetails', 'snippet'],
+      part: ['id', 'contentDetails', 'snippet'],
       mine: true,
     })
 
+    const myChannelId = channelRes.data.items?.[0]?.id ?? ''
     const channelTitle = channelRes.data.items?.[0]?.snippet?.title ?? "Jack Howlin'"
     const uploadsPlaylistId =
       channelRes.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads
@@ -63,7 +64,7 @@ export async function fetchYouTubeComments(): Promise<void> {
       try {
         const commentsRes = await youtube.commentThreads.list({
           auth: oauth2Client,
-          part: ['snippet'],
+          part: ['snippet', 'replies'],
           videoId,
           maxResults: 50,
           order: 'time',
@@ -74,7 +75,7 @@ export async function fetchYouTubeComments(): Promise<void> {
           if (!topComment) continue
 
           const author = topComment.authorDisplayName ?? 'Unknown'
-          // Filter out comments from the artist himself
+          // Filter out top-level comments posted by the artist himself
           if (
             author.toLowerCase() === '@jackhowlin' ||
             author.toLowerCase() === 'jack howlin\'' ||
@@ -84,13 +85,54 @@ export async function fetchYouTubeComments(): Promise<void> {
           }
 
           const platformCommentId = item.id!
+          const likeCount = topComment.likeCount ?? 0
+          const isLikedByCreator = topComment.viewerRating === 'like'
+          const replyCount = item.snippet?.totalReplyCount ?? 0
+
+          // Check if Jack Howlin' replied to this comment thread
+          const threadReplies = item.replies?.comments ?? []
+          const creatorRepliesText: string[] = []
+          for (const reply of threadReplies) {
+            const rSnippet = reply.snippet
+            if (!rSnippet) continue
+            const rAuthor = rSnippet.authorDisplayName ?? ''
+            const rChannelId = rSnippet.authorChannelId?.value ?? ''
+            if (
+              rChannelId === myChannelId ||
+              rAuthor.toLowerCase() === channelTitle.toLowerCase() ||
+              rAuthor.toLowerCase() === '@jackhowlin' ||
+              rAuthor.toLowerCase() === 'jack howlin\''
+            ) {
+              if (rSnippet.textDisplay) creatorRepliesText.push(rSnippet.textDisplay)
+            }
+          }
+
+          const isRepliedByCreator = creatorRepliesText.length > 0
+
           const existing = await db
             .collection('comments')
             .where('platformCommentId', '==', platformCommentId)
             .limit(1)
             .get()
 
-          if (!existing.empty) continue
+          if (!existing.empty) {
+            // Update existing comment's live stats (likes & replied status)
+            const docId = existing.docs[0].id
+            const existingData = existing.docs[0].data() as CommentDoc
+            await db.collection('comments').doc(docId).update({
+              likeCount,
+              isLikedByCreator,
+              isRepliedByCreator,
+              creatorReplies: creatorRepliesText,
+              replyCount,
+              sourceUrl,
+              sourceType,
+              // If Jack already replied natively on YouTube, mark as replied if it was new
+              status: isRepliedByCreator && existingData.status === 'new' ? 'replied' : existingData.status,
+              chosenReply: isRepliedByCreator && !existingData.chosenReply ? creatorRepliesText[0] : existingData.chosenReply,
+            })
+            continue
+          }
 
           const commentDoc: CommentDoc = {
             platform: 'youtube',
@@ -104,13 +146,18 @@ export async function fetchYouTubeComments(): Promise<void> {
             text: topComment.textDisplay ?? '',
             publishedAt: Timestamp.fromDate(new Date(topComment.publishedAt ?? Date.now())),
             fetchedAt: Timestamp.now(),
-            status: 'new',
+            status: isRepliedByCreator ? 'replied' : 'new',
             generatedReplies: [],
-            chosenReply: null,
+            chosenReply: isRepliedByCreator ? creatorRepliesText[0] : null,
+            likeCount,
+            isLikedByCreator,
+            isRepliedByCreator,
+            creatorReplies: creatorRepliesText,
+            replyCount,
           }
 
           const docRef = await db.collection('comments').add(commentDoc)
-          console.log(`[YouTube] Saved comment ${docRef.id} from ${commentDoc.author} on "${videoTitle}"`)
+          console.log(`[YouTube] Saved comment ${docRef.id} from ${commentDoc.author} on "${videoTitle}" (Likes: ${likeCount}, Liked: ${isLikedByCreator}, Replied: ${isRepliedByCreator})`)
         }
       } catch (err) {
         console.log(`[YouTube] No comments or error on video ${videoId}:`, err instanceof Error ? err.message : err)
@@ -153,15 +200,21 @@ export async function fetchInstagramComments(): Promise<void> {
 
       // Fetch comments on this post
       const commentsRes = await fetch(
-        `${BASE}/${media.id}/comments?fields=id,text,username,timestamp&limit=50&access_token=${token}`
+        `${BASE}/${media.id}/comments?fields=id,text,username,like_count,timestamp,replies{id,text,username}&limit=50&access_token=${token}`
       )
       const commentsData = (await commentsRes.json()) as {
-        data?: { id: string; text: string; username: string; timestamp: string }[]
+        data?: { id: string; text: string; username: string; like_count?: number; timestamp: string; replies?: { data: { id: string; text: string; username: string }[] } }[]
       }
 
       for (const comment of commentsData.data ?? []) {
-        // Skip artist own comments
         if (comment.username?.toLowerCase() === 'jack_howlin_official') continue
+
+        const likeCount = comment.like_count ?? 0
+        const replies = comment.replies?.data ?? []
+        const creatorReplies = replies
+          .filter(r => r.username?.toLowerCase() === 'jack_howlin_official')
+          .map(r => r.text)
+        const isRepliedByCreator = creatorReplies.length > 0
 
         const existing = await db
           .collection('comments')
@@ -169,7 +222,21 @@ export async function fetchInstagramComments(): Promise<void> {
           .limit(1)
           .get()
 
-        if (!existing.empty) continue
+        if (!existing.empty) {
+          const docId = existing.docs[0].id
+          const existingData = existing.docs[0].data() as CommentDoc
+          await db.collection('comments').doc(docId).update({
+            likeCount,
+            isRepliedByCreator,
+            creatorReplies,
+            replyCount: replies.length,
+            sourceUrl,
+            sourceType,
+            status: isRepliedByCreator && existingData.status === 'new' ? 'replied' : existingData.status,
+            chosenReply: isRepliedByCreator && !existingData.chosenReply ? creatorReplies[0] : existingData.chosenReply,
+          })
+          continue
+        }
 
         const commentDoc: CommentDoc = {
           platform: 'instagram',
@@ -183,9 +250,14 @@ export async function fetchInstagramComments(): Promise<void> {
           text: comment.text,
           publishedAt: Timestamp.fromDate(new Date(comment.timestamp)),
           fetchedAt: Timestamp.now(),
-          status: 'new',
+          status: isRepliedByCreator ? 'replied' : 'new',
           generatedReplies: [],
-          chosenReply: null,
+          chosenReply: isRepliedByCreator ? creatorReplies[0] : null,
+          likeCount,
+          isLikedByCreator: false,
+          isRepliedByCreator,
+          creatorReplies,
+          replyCount: replies.length,
         }
 
         const docRef = await db.collection('comments').add(commentDoc)
@@ -227,15 +299,21 @@ export async function fetchFacebookComments(): Promise<void> {
 
       // Fetch comments on this post
       const commentsRes = await fetch(
-        `${BASE}/${post.id}/comments?fields=id,message,from,created_time&limit=50&access_token=${token}`
+        `${BASE}/${post.id}/comments?fields=id,message,from,like_count,created_time,comments{id,message,from}&limit=50&access_token=${token}`
       )
       const commentsData = (await commentsRes.json()) as {
-        data?: { id: string; message: string; from?: { name: string; id: string }; created_time: string }[]
+        data?: { id: string; message: string; from?: { name: string; id: string }; like_count?: number; created_time: string; comments?: { data: { id: string; message: string; from?: { name: string; id: string } }[] } }[]
       }
 
       for (const comment of commentsData.data ?? []) {
-        // Skip page own comments
         if (comment.from?.name?.toLowerCase() === 'jack howlin\'' || comment.from?.id === pageId) continue
+
+        const likeCount = comment.like_count ?? 0
+        const subComments = comment.comments?.data ?? []
+        const creatorReplies = subComments
+          .filter(r => r.from?.id === pageId || r.from?.name?.toLowerCase() === 'jack howlin\'')
+          .map(r => r.message)
+        const isRepliedByCreator = creatorReplies.length > 0
 
         const existing = await db
           .collection('comments')
@@ -243,7 +321,21 @@ export async function fetchFacebookComments(): Promise<void> {
           .limit(1)
           .get()
 
-        if (!existing.empty) continue
+        if (!existing.empty) {
+          const docId = existing.docs[0].id
+          const existingData = existing.docs[0].data() as CommentDoc
+          await db.collection('comments').doc(docId).update({
+            likeCount,
+            isRepliedByCreator,
+            creatorReplies,
+            replyCount: subComments.length,
+            sourceUrl,
+            sourceType: 'post',
+            status: isRepliedByCreator && existingData.status === 'new' ? 'replied' : existingData.status,
+            chosenReply: isRepliedByCreator && !existingData.chosenReply ? creatorReplies[0] : existingData.chosenReply,
+          })
+          continue
+        }
 
         const commentDoc: CommentDoc = {
           platform: 'facebook',
@@ -257,9 +349,14 @@ export async function fetchFacebookComments(): Promise<void> {
           text: comment.message,
           publishedAt: Timestamp.fromDate(new Date(comment.created_time)),
           fetchedAt: Timestamp.now(),
-          status: 'new',
+          status: isRepliedByCreator ? 'replied' : 'new',
           generatedReplies: [],
-          chosenReply: null,
+          chosenReply: isRepliedByCreator ? creatorReplies[0] : null,
+          likeCount,
+          isLikedByCreator: false,
+          isRepliedByCreator,
+          creatorReplies,
+          replyCount: subComments.length,
         }
 
         const docRef = await db.collection('comments').add(commentDoc)

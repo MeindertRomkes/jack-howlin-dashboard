@@ -13,6 +13,10 @@ import {
   Film,
   FileText,
   Clock,
+  Heart,
+  ThumbsUp,
+  CheckCircle2,
+  CornerDownRight,
 } from 'lucide-react'
 
 interface CommentCardProps {
@@ -36,6 +40,7 @@ export default function CommentCard({
   const [selectedReply, setSelectedReply] = useState<string>('')
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showReplyForm, setShowReplyForm] = useState(!comment.isRepliedByCreator)
 
   const badge = PLATFORM_BADGES[comment.platform] ?? PLATFORM_BADGES.youtube
 
@@ -139,6 +144,9 @@ export default function CommentCard({
       })
     : ''
 
+  const hasReplied = comment.isRepliedByCreator || comment.status === 'replied'
+  const creatorReplyText = comment.creatorReplies?.[0] || comment.chosenReply
+
   return (
     <div className="bg-stone-900 border border-stone-800 rounded-xl overflow-hidden shadow-lg hover:border-stone-700 transition-all">
       {/* ───────────────────────────────────────────────────────── */}
@@ -175,7 +183,7 @@ export default function CommentCard({
       </div>
 
       {/* ───────────────────────────────────────────────────────── */}
-      {/* COMMENT CONTENT                                           */}
+      {/* COMMENT CONTENT & ENGAGEMENT METRICS                      */}
       {/* ───────────────────────────────────────────────────────── */}
       <div className="p-5 space-y-4">
         <div className="flex items-start gap-3.5">
@@ -193,84 +201,136 @@ export default function CommentCard({
           )}
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span className="text-stone-100 text-sm font-bold">
                 {comment.author}
               </span>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${badge.bg} ${badge.text} ${badge.border}`}>
                 {badge.label}
               </span>
+
+              {/* Liked by Jack indicator */}
+              {comment.isLikedByCreator && (
+                <span className="flex items-center gap-1 text-[10px] font-bold bg-rose-950/60 text-rose-300 border border-rose-800/70 px-2 py-0.5 rounded uppercase tracking-wider">
+                  <Heart className="w-2.5 h-2.5 text-rose-400 fill-rose-400" />
+                  Geliked door Jack
+                </span>
+              )}
+
+              {/* Likes counter */}
+              {(comment.likeCount ?? 0) > 0 && (
+                <span className="flex items-center gap-1 text-[11px] text-stone-400 bg-stone-950 px-2 py-0.5 rounded border border-stone-800">
+                  <ThumbsUp className="w-3 h-3 text-amber-400" />
+                  {comment.likeCount}
+                </span>
+              )}
+
+              {/* Already Replied Indicator */}
+              {hasReplied && (
+                <span className="flex items-center gap-1 text-[10px] font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-800/70 px-2 py-0.5 rounded uppercase tracking-wider">
+                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
+                  Al beantwoord
+                </span>
+              )}
             </div>
 
+            {/* Comment Body */}
             <div className="bg-stone-950/60 border border-stone-800/80 rounded-xl p-3.5">
               <p className="text-stone-200 text-sm leading-relaxed whitespace-pre-wrap">
                 {comment.text}
               </p>
             </div>
-          </div>
-        </div>
 
-        {/* ───────────────────────────────────────────────────────── */}
-        {/* AI REPLIES SECTION                                        */}
-        {/* ───────────────────────────────────────────────────────── */}
-        <div className="pt-2">
-          <div className="flex items-center gap-1.5 text-xs text-amber-400 font-semibold mb-2">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>AI Antwoordsuggesties (Jack Howlin&apos; Outlaw Voice):</span>
-          </div>
-
-          {comment.generatedReplies.length > 0 ? (
-            <ReplyOptions
-              generatedReplies={comment.generatedReplies}
-              onSelect={setSelectedReply}
-              disabled={posting}
-            />
-          ) : (
-            <div className="p-3 bg-stone-950/40 rounded-xl border border-stone-800/80 text-xs text-stone-400 flex items-center gap-2">
-              <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-              <span>AI stem leert en formuleert antwoordsuggesties...</span>
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <div className="p-3 bg-red-950/40 border border-red-800 text-red-300 text-xs rounded-xl flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* ───────────────────────────────────────────────────────── */}
-        {/* ACTION BUTTONS                                            */}
-        {/* ───────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between pt-3 border-t border-stone-800">
-          <button
-            onClick={handleIgnore}
-            disabled={posting}
-            className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-300 uppercase tracking-wider font-semibold px-3 py-1.5 rounded-lg hover:bg-stone-800 transition-colors"
-          >
-            <EyeOff className="w-3.5 h-3.5" />
-            <span>Negeren</span>
-          </button>
-
-          <button
-            onClick={handlePost}
-            disabled={!selectedReply.trim() || posting}
-            className="bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-stone-950 font-bold px-5 py-2.5 rounded-lg text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2"
-          >
-            {posting ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
-                <span>Plaatsen...</span>
-              </>
-            ) : (
-              <>
-                <Send className="w-3.5 h-3.5" />
-                <span>Plaats Antwoord</span>
-              </>
+            {/* Existing Creator Reply Box */}
+            {hasReplied && creatorReplyText && (
+              <div className="mt-3 pl-3 border-l-2 border-amber-500/60 bg-stone-950/40 rounded-r-lg p-3">
+                <div className="flex items-center gap-1.5 text-xs text-amber-400 font-bold mb-1">
+                  <CornerDownRight className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Geplaatst antwoord van Jack Howlin&apos;:</span>
+                </div>
+                <p className="text-stone-300 text-xs italic leading-relaxed">
+                  &ldquo;{creatorReplyText}&rdquo;
+                </p>
+              </div>
             )}
-          </button>
+          </div>
         </div>
+
+        {/* ───────────────────────────────────────────────────────── */}
+        {/* AI REPLIES & REPLY ACTIONS                                */}
+        {/* ───────────────────────────────────────────────────────── */}
+        {hasReplied && !showReplyForm ? (
+          <div className="pt-2 flex items-center justify-between border-t border-stone-800/80">
+            <span className="text-xs text-stone-500">
+              Deze reactie is reeds voorzien van een antwoord.
+            </span>
+            <button
+              onClick={() => setShowReplyForm(true)}
+              className="text-xs text-amber-400 hover:text-amber-300 underline font-semibold"
+            >
+              Nog een reactie plaatsen
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="pt-2 border-t border-stone-800/80">
+              <div className="flex items-center gap-1.5 text-xs text-amber-400 font-semibold mb-2">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>AI Antwoordsuggesties (Jack Howlin&apos; Outlaw Voice):</span>
+              </div>
+
+              {comment.generatedReplies && comment.generatedReplies.length > 0 ? (
+                <ReplyOptions
+                  generatedReplies={comment.generatedReplies}
+                  onSelect={setSelectedReply}
+                  disabled={posting}
+                />
+              ) : (
+                <div className="p-3 bg-stone-950/40 rounded-xl border border-stone-800/80 text-xs text-stone-400 flex items-center gap-2">
+                  <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  <span>AI stem leert en formuleert antwoordsuggesties...</span>
+                </div>
+              )}
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-950/40 border border-red-800 text-red-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-stone-800">
+              <button
+                onClick={handleIgnore}
+                disabled={posting}
+                className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-300 uppercase tracking-wider font-semibold px-3 py-1.5 rounded-lg hover:bg-stone-800 transition-colors"
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+                <span>Negeren</span>
+              </button>
+
+              <button
+                onClick={handlePost}
+                disabled={!selectedReply.trim() || posting}
+                className="bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-stone-950 font-bold px-5 py-2.5 rounded-lg text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2"
+              >
+                {posting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
+                    <span>Plaatsen...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Plaats Antwoord</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

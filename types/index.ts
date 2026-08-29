@@ -20,6 +20,11 @@ export interface Comment {
   status: CommentStatus
   generatedReplies: string[]
   chosenReply: string | null
+  likeCount?: number
+  isLikedByCreator?: boolean
+  isRepliedByCreator?: boolean
+  creatorReplies?: string[]
+  replyCount?: number
 }
 
 export interface Post {

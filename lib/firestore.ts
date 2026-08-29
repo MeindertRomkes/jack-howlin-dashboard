@@ -25,6 +25,16 @@ export async function getNewComments(limitCount = 50): Promise<Comment[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as Comment))
 }
 
+export async function getAllComments(limitCount = 50): Promise<Comment[]> {
+  const q = query(
+    collection(db, 'comments'),
+    orderBy('publishedAt', 'desc'),
+    firestoreLimit(limitCount)
+  )
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Comment))
+}
+
 export async function updateCommentStatus(
   commentId: string,
   status: Comment['status'],
