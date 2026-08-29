@@ -14,7 +14,6 @@ import {
   FileText,
   Clock,
   Heart,
-  ThumbsUp,
   CheckCircle2,
   CornerDownRight,
   Star,
@@ -40,8 +39,16 @@ export default function CommentCard({
 }: CommentCardProps) {
   const [selectedReply, setSelectedReply] = useState<string>('')
   const [posting, setPosting] = useState(false)
+  const [liking, setLiking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showReplyForm, setShowReplyForm] = useState(!comment.isRepliedByCreator)
+
+  // Direct Like state
+  const [isLiked, setIsLiked] = useState<boolean>(!!comment.isLikedByCreator)
+  const [likeCount, setLikeCount] = useState<number>(comment.likeCount || 0)
+
+  // Auto-Like toggle option when commenting
+  const [alsoLike, setAlsoLike] = useState<boolean>(true)
 
   const badge = PLATFORM_BADGES[comment.platform] ?? PLATFORM_BADGES.youtube
 
@@ -90,6 +97,43 @@ export default function CommentCard({
     }
   }
 
+  // Toggle Like button handler
+  async function handleToggleLike() {
+    if (liking) return
+    const prevLiked = isLiked
+    const prevCount = likeCount
+    const nextLiked = !prevLiked
+    const nextCount = nextLiked ? prevCount + 1 : Math.max(0, prevCount - 1)
+
+    // Optimistic UI update
+    setIsLiked(nextLiked)
+    setLikeCount(nextCount)
+    setLiking(true)
+
+    try {
+      const res = await fetch('/api/comments/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commentId: comment.id,
+          isLiked: nextLiked,
+        }),
+      })
+
+      if (!res.ok) {
+        // Rollback
+        setIsLiked(prevLiked)
+        setLikeCount(prevCount)
+      }
+    } catch {
+      // Rollback
+      setIsLiked(prevLiked)
+      setLikeCount(prevCount)
+    } finally {
+      setLiking(false)
+    }
+  }
+
   async function handlePost() {
     if (!selectedReply.trim()) return
     setPosting(true)
@@ -101,6 +145,9 @@ export default function CommentCard({
         body: JSON.stringify({
           platformCommentId: comment.platformCommentId,
           reply: selectedReply,
+          platform: comment.platform,
+          alsoLike: alsoLike,
+          commentId: comment.id,
         }),
       })
       if (!replyRes.ok) throw new Error('Kon antwoord niet plaatsen via platform API')
@@ -117,6 +164,10 @@ export default function CommentCard({
         }),
       })
       if (!approveRes.ok) throw new Error('Fout bij opslaan in geschiedenis')
+
+      if (alsoLike) {
+        setIsLiked(true)
+      }
 
       onReplied(comment.id)
     } catch (e) {
@@ -202,29 +253,13 @@ export default function CommentCard({
           )}
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-stone-100 text-sm font-bold">
                 {comment.author}
               </span>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${badge.bg} ${badge.text} ${badge.border}`}>
                 {badge.label}
               </span>
-
-              {/* Liked by Jack indicator */}
-              {comment.isLikedByCreator && (
-                <span className="flex items-center gap-1 text-[10px] font-bold bg-rose-950/60 text-rose-300 border border-rose-800/70 px-2 py-0.5 rounded uppercase tracking-wider">
-                  <Heart className="w-2.5 h-2.5 text-rose-400 fill-rose-400" />
-                  Geliked door Jack
-                </span>
-              )}
-
-              {/* Likes counter */}
-              {(comment.likeCount ?? 0) > 0 && (
-                <span className="flex items-center gap-1 text-[11px] text-stone-400 bg-stone-950 px-2 py-0.5 rounded border border-stone-800">
-                  <ThumbsUp className="w-3 h-3 text-amber-400" />
-                  {comment.likeCount}
-                </span>
-              )}
 
               {/* Superfan Badge */}
               {comment.isSuperfan && (
@@ -233,6 +268,22 @@ export default function CommentCard({
                   Superfan ({comment.fanCommentCount || 2} reacties)
                 </span>
               )}
+
+              {/* Interactive Like Button */}
+              <button
+                onClick={handleToggleLike}
+                disabled={liking}
+                className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
+                  isLiked
+                    ? 'bg-rose-950/80 text-rose-300 border-rose-600/80 shadow-sm shadow-rose-950/50 hover:bg-rose-900/80'
+                    : 'bg-stone-950/80 text-stone-400 border-stone-800 hover:text-rose-400 hover:border-rose-900 hover:bg-stone-900'
+                }`}
+                title={isLiked ? 'Geliked (klik om in te trekken)' : 'Like deze comment'}
+              >
+                <Heart className={`w-3 h-3 transition-transform ${isLiked ? 'text-rose-400 fill-rose-400 scale-110' : 'text-stone-400'}`} />
+                <span>{isLiked ? 'Geliked' : 'Like'}</span>
+                {likeCount > 0 && <span className="text-stone-400 font-normal">({likeCount})</span>}
+              </button>
 
               {/* Already Replied Indicator */}
               {hasReplied && (
@@ -275,7 +326,7 @@ export default function CommentCard({
             </span>
             <button
               onClick={() => setShowReplyForm(true)}
-              className="text-xs text-amber-400 hover:text-amber-300 underline font-semibold"
+              className="text-xs text-amber-400 hover:text-amber-300 underline font-semibold cursor-pointer"
             >
               Nog een reactie plaatsen
             </button>
@@ -309,34 +360,50 @@ export default function CommentCard({
               </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="flex items-center justify-between pt-3 border-t border-stone-800">
+            {/* Action Buttons & Direct Like Option */}
+            <div className="flex items-center justify-between pt-3 border-t border-stone-800 gap-3 flex-wrap">
               <button
                 onClick={handleIgnore}
                 disabled={posting}
-                className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-300 uppercase tracking-wider font-semibold px-3 py-1.5 rounded-lg hover:bg-stone-800 transition-colors"
+                className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-300 uppercase tracking-wider font-semibold px-3 py-1.5 rounded-lg hover:bg-stone-800 transition-colors cursor-pointer"
               >
                 <EyeOff className="w-3.5 h-3.5" />
                 <span>Negeren</span>
               </button>
 
-              <button
-                onClick={handlePost}
-                disabled={!selectedReply.trim() || posting}
-                className="bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-stone-950 font-bold px-5 py-2.5 rounded-lg text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2"
-              >
-                {posting ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
-                    <span>Plaatsen...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Plaats Antwoord</span>
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-3">
+                {/* Auto-Like Checkbox Toggle */}
+                <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer select-none bg-stone-950/80 px-3 py-2 rounded-lg border border-stone-800/80 hover:border-stone-700 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={alsoLike}
+                    onChange={(e) => setAlsoLike(e.target.checked)}
+                    disabled={posting}
+                    className="w-4 h-4 rounded border-stone-700 bg-stone-900 text-amber-500 focus:ring-amber-500/20 accent-amber-500 cursor-pointer"
+                  />
+                  <Heart className={`w-3.5 h-3.5 ${alsoLike ? 'text-rose-400 fill-rose-400' : 'text-stone-500'}`} />
+                  <span className="font-semibold text-stone-200">Meteen liken bij plaatsen</span>
+                </label>
+
+                {/* Submit Button */}
+                <button
+                  onClick={handlePost}
+                  disabled={!selectedReply.trim() || posting}
+                  className="bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-stone-950 font-bold px-5 py-2.5 rounded-lg text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                >
+                  {posting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
+                      <span>Plaatsen...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{alsoLike ? 'Plaats & Like' : 'Plaats Antwoord'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </>
         )}
