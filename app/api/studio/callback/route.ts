@@ -30,7 +30,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const parsed = resultJson ? JSON.parse(resultJson) as { resultUrls: string[] } : { resultUrls: [] }
     await updateKieJob(jobId, { state: 'success', resultUrls: parsed.resultUrls })
     for (const url of parsed.resultUrls) {
-      await createMediaAsset({ url, type: jobData.model === 'photo' ? 'image' : 'video', prompt: jobData.prompt, kieJobId: jobId, ...(jobData.linkedPostId ? { linkedPostId: jobData.linkedPostId } : {}) })
+      await createMediaAsset({
+        url,
+        type: jobData.model === 'photo' ? 'image' : 'video',
+        prompt: jobData.prompt,
+        kieJobId: jobId,
+        ...(jobData.linkedPostId ? { linkedPostId: jobData.linkedPostId } : {}),
+        ...(jobData.videoType ? { videoType: jobData.videoType } : {}),
+        ...(jobData.sunoTrackId ? { sunoTrackId: jobData.sunoTrackId } : {}),
+        ...(jobData.snippetId ? { snippetId: jobData.snippetId } : {}),
+        ...(jobData.captionSuggestion ? { suggestedCaption: jobData.captionSuggestion } : {}),
+      })
     }
   } else if (state === 'fail' && jobData.state !== 'fail') {
     await updateKieJob(jobId, { state: 'fail', failMsg: failMsg ?? 'Onbekende fout' })

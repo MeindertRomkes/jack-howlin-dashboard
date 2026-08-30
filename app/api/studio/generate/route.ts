@@ -5,13 +5,16 @@ import { getJackCoreSet, getSunoTracks, createKieJob } from '@/lib/studio-firest
 import '@/lib/firebase-admin'
 
 interface GenerateBody {
-  mode: 'photo' | 'video'
+  mode: 'photo' | 'video' | 'audiogram'
+  videoType?: 'cinematic' | 'audiogram'
   prompt: string
   aspectRatio: string
   quality?: 'basic' | 'high'
   resolution?: '480p' | '720p' | '1080p'
   duration?: number
   sunoTrackId?: string
+  snippetId?: string
+  captionSuggestion?: string
   linkedPostId?: string
 }
 
@@ -26,18 +29,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const body = (await req.json()) as GenerateBody
-  const { mode, prompt, aspectRatio, quality = 'high', resolution = '1080p', duration = 5, sunoTrackId, linkedPostId } = body
+  const {
+    mode,
+    videoType,
+    prompt,
+    aspectRatio,
+    quality = 'high',
+    resolution = '1080p',
+    duration = 5,
+    sunoTrackId,
+    snippetId,
+    captionSuggestion,
+    linkedPostId,
+  } = body
 
   if (!prompt?.trim()) return NextResponse.json({ error: 'Prompt is verplicht' }, { status: 400 })
 
   const coreSet = await getJackCoreSet()
   const referenceUrls = coreSet.map(p => p.publicUrl)
   const callBackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/studio/callback`
-  const kieModel = mode === 'photo' ? 'seedream/5-pro-image-to-image' : 'bytedance/seedance-2-5'
+  const effectiveMode = mode === 'photo' ? 'photo' : 'video'
+  const effectiveVideoType = videoType || (mode === 'audiogram' ? 'audiogram' : mode === 'video' ? 'cinematic' : undefined)
+  const kieModel = effectiveMode === 'photo' ? 'seedream/5-pro-image-to-image' : 'bytedance/seedance-2-5'
 
   let kieInput: Record<string, unknown>
 
-  if (mode === 'photo') {
+  if (effectiveMode === 'photo') {
     kieInput = {
       prompt,
       image_urls: referenceUrls.length > 0 ? referenceUrls : undefined,
@@ -50,7 +67,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     let audioUrl: string | undefined
     if (sunoTrackId) {
       const tracks = await getSunoTracks()
-      audioUrl = tracks.find(t => t.id === sunoTrackId)?.publicUrl
+      const track = tracks.find(t => t.id === sunoTrackId)
+      if (track) {
+        if (snippetId && track.snippets) {
+          const snippet = track.snippets.find(s => s.id === snippetId)
+          audioUrl = snippet?.publicUrl || snippet?.storageUrl || track.publicUrl
+        } else {
+          audioUrl = track.publicUrl
+        }
+      }
     }
     const refPrompt = referenceUrls.length > 0
       ? `Reference ${referenceUrls.map((_, i) => `@Image${i + 1}`).join(' ')} for the character appearance. ${prompt}`
@@ -70,7 +95,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const { taskId } = await createKieTask({ model: kieModel, input: kieInput, callBackUrl })
   const jobId = await createKieJob({
-    taskId, model: mode, kieModel, prompt, aspectRatio,
+    taskId,
+    model: effectiveMode,
+    kieModel,
+    prompt,
+    aspectRatio,
+    ...(effectiveVideoType ? { videoType: effectiveVideoType } : {}),
+    ...(sunoTrackId ? { sunoTrackId } : {}),
+    ...(snippetId ? { snippetId } : {}),
+    ...(captionSuggestion ? { captionSuggestion } : {}),
     ...(linkedPostId ? { linkedPostId } : {}),
   })
 
