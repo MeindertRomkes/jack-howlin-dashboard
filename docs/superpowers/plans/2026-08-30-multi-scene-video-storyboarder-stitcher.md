@@ -28,7 +28,7 @@
 **Interfaces:**
 - Produces: `StoryboardScene`, `StoryboardJob`, `createStoryboardJob(data)`, `updateStoryboardJob(id, update)`, `getStoryboardJob(id)`.
 
-- [ ] **Step 1: Write the failing unit test**
+- [x] **Step 1: Write the failing unit test**
 
 Create `tests/lib/storyboard-firestore.test.ts`:
 ```typescript
@@ -48,20 +48,20 @@ describe('StoryboardJob and StoryboardScene types and calculations', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify**
+- [x] **Step 2: Run test to verify**
 
 Run: `npx vitest run tests/lib/storyboard-firestore.test.ts`
 
-- [ ] **Step 3: Update `types/index.ts` and `lib/studio-firestore.ts`**
+- [x] **Step 3: Update `types/index.ts` and `lib/studio-firestore.ts`**
 
 Add `StoryboardScene` and `StoryboardJob` to `types/index.ts`.
 In `lib/studio-firestore.ts`, implement `createStoryboardJob`, `updateStoryboardJob`, `getStoryboardJob`.
 
-- [ ] **Step 4: Run test to verify passes**
+- [x] **Step 4: Run test to verify passes**
 
 Run: `npx vitest run tests/lib/storyboard-firestore.test.ts`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add types/index.ts lib/studio-firestore.ts tests/lib/storyboard-firestore.test.ts
@@ -79,7 +79,7 @@ git commit -m "feat(studio): add StoryboardJob types and Firestore helpers"
 **Interfaces:**
 - Produces: `POST /api/studio/storyboard/suggest` $\rightarrow$ `{ scenes: StoryboardScene[], caption: string, hashtags: string[] }`
 
-- [ ] **Step 1: Write test for scene splitting & prompt suggestion**
+- [x] **Step 1: Write test for scene splitting & prompt suggestion**
 
 Create `tests/api/storyboard-suggest.test.ts`:
 ```typescript
@@ -106,19 +106,19 @@ describe('Storyboard Scene Splitting Logic', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify**
+- [x] **Step 2: Run test to verify**
 
 Run: `npx vitest run tests/api/storyboard-suggest.test.ts`
 
-- [ ] **Step 3: Implement `app/api/studio/storyboard/suggest/route.ts`**
+- [x] **Step 3: Implement `app/api/studio/storyboard/suggest/route.ts`**
 
 Connect with Gemini (`@google/generative-ai`) to generate structured scenes (shotType, duration, prompt, cameraMotion) and Jack voice caption + hashtags. Include deterministic fallback if Gemini is offline.
 
-- [ ] **Step 4: Run test to verify passes**
+- [x] **Step 4: Run test to verify passes**
 
 Run: `npx vitest run tests/api/storyboard-suggest.test.ts`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/api/studio/storyboard/suggest/route.ts tests/api/storyboard-suggest.test.ts
