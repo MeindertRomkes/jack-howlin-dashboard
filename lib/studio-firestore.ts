@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from './firebase-admin'
-import type { KieJob, MediaAsset, SunoTrack, JackCoreSetPhoto } from '@/types'
+import type { KieJob, MediaAsset, SunoTrack, JackCoreSetPhoto, AudioSnippet } from '@/types'
 
 export async function getJackCoreSet(): Promise<JackCoreSetPhoto[]> {
   const snap = await adminDb.collection('jack_core_set').orderBy('order', 'asc').get()
@@ -32,6 +32,31 @@ export async function addSunoTrack(
 
 export async function deleteSunoTrack(id: string): Promise<void> {
   await adminDb.collection('suno_tracks').doc(id).delete()
+}
+
+export async function addTrackSnippet(
+  trackId: string,
+  snippet: Omit<AudioSnippet, 'id' | 'createdAt'>
+): Promise<string> {
+  const snippetId = `snip_${Date.now()}`
+  const snippetObj = {
+    ...snippet,
+    id: snippetId,
+    createdAt: FieldValue.serverTimestamp(),
+  }
+  await adminDb.collection('suno_tracks').doc(trackId).update({
+    snippets: FieldValue.arrayUnion(snippetObj),
+  })
+  return snippetId
+}
+
+export async function deleteTrackSnippet(trackId: string, snippetId: string): Promise<void> {
+  const docRef = adminDb.collection('suno_tracks').doc(trackId)
+  const docSnap = await docRef.get()
+  if (!docSnap.exists) return
+  const track = docSnap.data() as SunoTrack
+  const snippets = (track.snippets || []).filter(s => s.id !== snippetId)
+  await docRef.update({ snippets })
 }
 
 export async function createKieJob(

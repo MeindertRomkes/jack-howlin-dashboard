@@ -210,6 +210,10 @@ export interface KieJob {
   prompt: string
   aspectRatio: string
   resultUrls: string[]
+  videoType?: 'cinematic' | 'audiogram'
+  sunoTrackId?: string
+  snippetId?: string
+  captionSuggestion?: string
   linkedPostId?: string
   failMsg?: string
   createdAt: Timestamp
@@ -220,9 +224,25 @@ export interface MediaAsset {
   id: string
   url: string
   type: 'image' | 'video'
+  videoType?: 'cinematic' | 'audiogram'
+  sunoTrackId?: string
+  snippetId?: string
+  suggestedCaption?: string
   prompt: string
   kieJobId: string
   linkedPostId?: string
+  createdAt: Timestamp
+}
+
+export interface AudioSnippet {
+  id: string
+  name: string
+  startTime: number
+  endTime: number
+  duration: number
+  highlightLyric?: string
+  storageUrl?: string
+  publicUrl?: string
   createdAt: Timestamp
 }
 
@@ -232,6 +252,7 @@ export interface SunoTrack {
   storageUrl: string
   publicUrl: string
   durationSeconds?: number
+  snippets?: AudioSnippet[]
   createdAt: Timestamp
   // Release metadata
   releaseType: 'single' | 'album'
