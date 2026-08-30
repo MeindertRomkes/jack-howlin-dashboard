@@ -185,7 +185,7 @@ describe('SunoLibraryManager Component', () => {
     fireEvent.click(knipBtns[0])
 
     expect(screen.getByText('Audio Snippet Knippen')).toBeInTheDocument()
-    expect(screen.getByText(/Selecteer het beste 3-30s hook segment/i)).toBeInTheDocument()
+    expect(screen.getByText(/Selecteer het beste 3-120s hook segment/i)).toBeInTheDocument()
   })
 
   it('toggles snippet playback when play button is clicked', () => {

@@ -13,6 +13,7 @@ export interface Props {
   onSnippetChange?: (snippet: AudioSnippet | null) => void
   onOpenSnipper?: (track: SunoTrack) => void
   initialTrackTitle?: string
+  onTrackSelect?: (track: SunoTrack | null) => void
 }
 
 export default function SunoTrackSelector({
@@ -22,6 +23,7 @@ export default function SunoTrackSelector({
   onSnippetChange,
   onOpenSnipper,
   initialTrackTitle,
+  onTrackSelect,
 }: Props) {
   const [tracks, setTracks] = useState<SunoTrack[]>([])
 
@@ -50,6 +52,10 @@ export default function SunoTrackSelector({
   const selectedTrack = useMemo(() => {
     return tracks.find((t) => t.id === value) || null
   }, [tracks, value])
+
+  useEffect(() => {
+    onTrackSelect?.(selectedTrack)
+  }, [selectedTrack, onTrackSelect])
 
   const selectedSnippet = useMemo(() => {
     if (!selectedTrack?.snippets || !selectedSnippetId) return null

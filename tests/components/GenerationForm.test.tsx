@@ -60,6 +60,18 @@ vi.mock('@/components/studio/JackCoreSetPreview', () => ({
   default: () => <div data-testid="jack-core-set-preview">Core Set Preview</div>,
 }))
 
+// Mock StoryboardDirector to keep component unit tests focused
+vi.mock('@/components/studio/StoryboardDirector', () => ({
+  default: ({ track, snippet, onJobCreated, onCancel }: any) => (
+    <div data-testid="storyboard-director">
+      <span>Storyboard Director Panel: {track.name}</span>
+      <span>Snippet: {snippet?.name || 'none'}</span>
+      <button type="button" onClick={() => onJobCreated('sb_job_123')}>Mock Create SB Job</button>
+      <button type="button" onClick={onCancel}>Mock Cancel SB</button>
+    </div>
+  ),
+}))
+
 describe('GenerationForm Component', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -213,6 +225,7 @@ describe('GenerationForm Component', () => {
 
     const fetchCall = (global.fetch as any).mock.calls[0]
     const sentBody = JSON.parse(fetchCall[1].body)
+    expect(sentBody.engine).toBe('higgsfield')
     expect(sentBody.mode).toBe('video')
     expect(sentBody.videoType).toBe('audiogram')
     expect(sentBody.prompt).toBe('Jack Howlin acoustic session')
@@ -222,5 +235,107 @@ describe('GenerationForm Component', () => {
     expect(sentBody.linkedPostId).toBe('post_123')
 
     expect(onJobCreated).toHaveBeenCalledWith('job_999', 'task_888')
+  })
+
+  it('allows switching engine from Higgsfield to Kie.ai and includes engine in payload', async () => {
+    const onJobCreated = vi.fn()
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ jobId: 'job_kie_1', taskId: 'task_kie_1' }),
+    })
+
+    render(<GenerationForm onJobCreated={onJobCreated} />)
+
+    // Switch engine to Kie.ai
+    const kieEngineBtn = screen.getByText('Kie.ai (Seedream)')
+    fireEvent.click(kieEngineBtn)
+
+    // Fill prompt
+    const textarea = screen.getByPlaceholderText(/Jack staand op een verlaten/i)
+    fireEvent.change(textarea, { target: { value: 'Jack Howlin vintage photo' } })
+
+    // Submit
+    const submitBtn = screen.getByText(/Foto Genereren/i)
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/studio/generate',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"engine":"kie"'),
+        })
+      )
+    })
+  })
+
+  it('renders prominent Storyboard Director button in Video mode and calculates scene recommendation', async () => {
+    render(<GenerationForm onJobCreated={vi.fn()} initialMode="video" />)
+
+    // In Video mode with default duration 5s (1 scene)
+    const directorBtn = screen.getByRole('button', {
+      name: /Open Multi-Scene Storyboard Director/i,
+    })
+    expect(directorBtn).toBeInTheDocument()
+    expect(screen.getAllByText(/1 Scène/i).length).toBeGreaterThan(0)
+  })
+
+  it('opens StoryboardDirector when prominent button is clicked, and calls onStoryboardJobCreated on creation', async () => {
+    const handleStoryboardJobCreated = vi.fn()
+
+    render(
+      <GenerationForm
+        onJobCreated={vi.fn()}
+        onStoryboardJobCreated={handleStoryboardJobCreated}
+        initialMode="video"
+      />
+    )
+
+    // Select track
+    const trackSelect = screen.getByDisplayValue(/Geen track/i)
+    fireEvent.change(trackSelect, { target: { value: 'track_01' } })
+
+    // Click snippet Chorus Drop
+    const snippetPill = await screen.findByText('Chorus Drop')
+    fireEvent.click(snippetPill)
+
+    // Click Open Multi-Scene Storyboard Director
+    const directorBtn = screen.getByRole('button', {
+      name: /Open Multi-Scene Storyboard Director/i,
+    })
+    fireEvent.click(directorBtn)
+
+    // StoryboardDirector is now rendered
+    expect(screen.getByTestId('storyboard-director')).toBeInTheDocument()
+    expect(screen.getByText(/Storyboard Director Panel: Dust & Diesel/i)).toBeInTheDocument()
+    expect(screen.getByText(/Snippet: Chorus Drop/i)).toBeInTheDocument()
+
+    // Trigger mock job creation
+    const createBtn = screen.getByRole('button', { name: /Mock Create SB Job/i })
+    fireEvent.click(createBtn)
+
+    expect(handleStoryboardJobCreated).toHaveBeenCalledWith('sb_job_123')
+    // After creation, director is closed and main form is restored
+    expect(screen.queryByTestId('storyboard-director')).toBeNull()
+    expect(screen.getByPlaceholderText(/Jack rijdt in een vintage pickup/i)).toBeInTheDocument()
+  })
+
+  it('closes StoryboardDirector when canceled and returns to GenerationForm', () => {
+    render(<GenerationForm onJobCreated={vi.fn()} initialMode="video" />)
+
+    const directorBtn = screen.getByRole('button', {
+      name: /Open Multi-Scene Storyboard Director/i,
+    })
+    fireEvent.click(directorBtn)
+
+    expect(screen.getByTestId('storyboard-director')).toBeInTheDocument()
+
+    // Click cancel
+    const cancelBtn = screen.getByRole('button', { name: /Mock Cancel SB/i })
+    fireEvent.click(cancelBtn)
+
+    // Should return to normal form
+    expect(screen.queryByTestId('storyboard-director')).toBeNull()
+    expect(screen.getByRole('button', { name: /Open Multi-Scene Storyboard Director/i })).toBeInTheDocument()
   })
 })

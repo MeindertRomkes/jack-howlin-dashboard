@@ -54,6 +54,7 @@ function StudioPageContent() {
           <h2 className="text-sm font-bold text-stone-300 tracking-wider uppercase">Nieuwe generatie</h2>
           <GenerationForm
             onJobCreated={handleJobCreated}
+            onStoryboardJobCreated={(jobId) => setActiveStoryboardJobId(jobId)}
             initialTrackTitle={trackTitle}
             initialPrompt={promptSuggestion}
             initialTrackId={trackId}

@@ -13,6 +13,7 @@ import {
   Clock,
   Volume2,
   Loader2,
+  Film,
 } from 'lucide-react'
 import type { SunoTrack, AudioSnippet } from '@/types'
 
@@ -31,10 +32,33 @@ export const PRESET_NAMES = [
   'Verse Hook',
 ] as const
 
-export const PRESET_DURATIONS = [5, 10, 15, 30] as const
+export const PRESET_DURATIONS = [5, 10, 15, 30, 45, 60] as const
 
 export const MIN_SNIPPET_DURATION = 3
-export const MAX_SNIPPET_DURATION = 30
+export const MAX_SNIPPET_DURATION = 120
+
+/**
+ * Returns the recommended number of scenes and label based on snippet duration:
+ * <= 15s: 1 Scène (Single Take)
+ * 16 - 30s: 2 Scènes (Dual Shot)
+ * 31 - 45s: 3 Scènes (Multi-Scene Storyboard)
+ * > 45s: 4 Scènes (Full Cinematic Reel)
+ */
+export function getSceneRecommendation(duration: number): {
+  sceneCount: number
+  label: string
+} {
+  if (duration <= 15) {
+    return { sceneCount: 1, label: '1 Scène (Single Take)' }
+  }
+  if (duration <= 30) {
+    return { sceneCount: 2, label: '2 Scènes (Dual Shot)' }
+  }
+  if (duration <= 45) {
+    return { sceneCount: 3, label: '3 Scènes (Multi-Scene Storyboard)' }
+  }
+  return { sceneCount: 4, label: '4 Scènes (Full Cinematic Reel)' }
+}
 
 /**
  * Formats a duration in seconds into `mm:ss.s` string format (e.g. 45.5 -> '0:45.5', 125.0 -> '2:05.0')
@@ -406,7 +430,7 @@ export default function AudioSnipper({
               </span>
             </h3>
             <p className="text-xs text-stone-400">
-              Selecteer het beste 3-30s hook segment voor AI video&apos;s en audiograms
+              Selecteer het beste 3-120s hook segment voor AI video&apos;s, multi-scene storyboards en audiograms
             </p>
           </div>
         </div>
@@ -448,6 +472,11 @@ export default function AudioSnipper({
             <span className="font-mono font-bold text-amber-400">
               {duration.toFixed(1)}s
             </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
+            <Film className="w-3 h-3 text-amber-400" />
+            <span>{getSceneRecommendation(duration).label}</span>
           </div>
         </div>
       </div>
@@ -494,8 +523,8 @@ export default function AudioSnipper({
             </div>
 
             {/* Interval Label inside Box */}
-            <div className="absolute top-1 left-2 text-[10px] font-mono font-bold text-amber-300 tracking-wider uppercase bg-stone-950/80 px-1.5 py-0.5 rounded border border-amber-500/40">
-              ✂️ {duration.toFixed(1)}s Snippet
+            <div className="absolute top-1 left-2 text-[10px] font-mono font-bold text-amber-300 tracking-wider uppercase bg-stone-950/80 px-1.5 py-0.5 rounded border border-amber-500/40 flex items-center gap-1">
+              <span>✂️ {duration.toFixed(1)}s Snippet</span>
             </div>
           </div>
 
@@ -660,28 +689,36 @@ export default function AudioSnipper({
       </div>
 
       {/* Preset Duration Buttons */}
-      <div className="flex flex-wrap items-center gap-2 bg-stone-950/50 p-3 rounded-lg border border-stone-800/60">
-        <div className="flex items-center gap-1.5 text-xs text-stone-400 mr-2">
-          <Clock className="w-3.5 h-3.5 text-amber-400" />
-          <span>Preset Duur:</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-stone-950/50 p-3 rounded-lg border border-stone-800/60">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-stone-400 mr-1">
+            <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <span>Preset Duur:</span>
+          </div>
+          {PRESET_DURATIONS.map((preset) => {
+            const isSelected = Math.abs(duration - preset) < 0.2
+            return (
+              <button
+                key={`preset-dur-${preset}`}
+                type="button"
+                onClick={() => setPresetDurationAction(preset)}
+                className={`px-3 py-1 rounded-md text-xs font-medium font-mono transition-all ${
+                  isSelected
+                    ? 'bg-amber-500 text-stone-950 font-bold shadow-sm'
+                    : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700'
+                }`}
+              >
+                {preset}s {preset === 10 ? '⭐' : ''}
+              </button>
+            )
+          })}
         </div>
-        {PRESET_DURATIONS.map((preset) => {
-          const isSelected = Math.abs(duration - preset) < 0.2
-          return (
-            <button
-              key={`preset-dur-${preset}`}
-              type="button"
-              onClick={() => setPresetDurationAction(preset)}
-              className={`px-3 py-1 rounded-md text-xs font-medium font-mono transition-all ${
-                isSelected
-                  ? 'bg-amber-500 text-stone-950 font-bold shadow-sm'
-                  : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700'
-              }`}
-            >
-              {preset}s {preset === 10 ? '⭐' : ''}
-            </button>
-          )
-        })}
+
+        {/* Dynamic Scene Recommendation Badge */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+          <Film className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+          <span>Aanbeveling: {getSceneRecommendation(duration).label}</span>
+        </div>
       </div>
 
       {/* Metadata: Preset Names, Custom Name, and Highlight Lyric */}

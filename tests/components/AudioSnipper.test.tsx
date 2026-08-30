@@ -6,8 +6,10 @@ import AudioSnipper, {
   adjustStartTimeHelper,
   adjustEndTimeHelper,
   applyPresetDuration,
+  getSceneRecommendation,
   PRESET_NAMES,
   PRESET_DURATIONS,
+  MAX_SNIPPET_DURATION,
 } from '@/components/studio/AudioSnipper'
 import type { SunoTrack, AudioSnippet } from '@/types'
 
@@ -58,6 +60,29 @@ describe('AudioSnipper Math & Helper Functions', () => {
     })
   })
 
+  describe('getSceneRecommendation', () => {
+    it('recommends 1 Scene for duration <= 15s', () => {
+      expect(getSceneRecommendation(5)).toEqual({ sceneCount: 1, label: '1 Scène (Single Take)' })
+      expect(getSceneRecommendation(15)).toEqual({ sceneCount: 1, label: '1 Scène (Single Take)' })
+    })
+
+    it('recommends 2 Scenes for duration 16 - 30s', () => {
+      expect(getSceneRecommendation(16)).toEqual({ sceneCount: 2, label: '2 Scènes (Dual Shot)' })
+      expect(getSceneRecommendation(30)).toEqual({ sceneCount: 2, label: '2 Scènes (Dual Shot)' })
+    })
+
+    it('recommends 3 Scenes for duration 31 - 45s', () => {
+      expect(getSceneRecommendation(31)).toEqual({ sceneCount: 3, label: '3 Scènes (Multi-Scene Storyboard)' })
+      expect(getSceneRecommendation(45)).toEqual({ sceneCount: 3, label: '3 Scènes (Multi-Scene Storyboard)' })
+    })
+
+    it('recommends 4 Scenes for duration > 45s', () => {
+      expect(getSceneRecommendation(46)).toEqual({ sceneCount: 4, label: '4 Scènes (Full Cinematic Reel)' })
+      expect(getSceneRecommendation(60)).toEqual({ sceneCount: 4, label: '4 Scènes (Full Cinematic Reel)' })
+      expect(getSceneRecommendation(120)).toEqual({ sceneCount: 4, label: '4 Scènes (Full Cinematic Reel)' })
+    })
+  })
+
   describe('adjustStartTimeHelper', () => {
     it('increments start time safely', () => {
       const res = adjustStartTimeHelper(10, 20, 1, 180)
@@ -76,9 +101,9 @@ describe('AudioSnipper Math & Helper Functions', () => {
       expect(res.startTime).toBe(15) // Clamped to 18 - 3 = 15
     })
 
-    it('enforces maximum snippet duration of 30s', () => {
-      const res = adjustStartTimeHelper(10, 45, -10, 180)
-      expect(res.startTime).toBe(15) // Clamped to 45 - 30 = 15
+    it('enforces maximum snippet duration of 120s', () => {
+      const res = adjustStartTimeHelper(10, 140, -10, 180)
+      expect(res.startTime).toBe(20) // Clamped to 140 - 120 = 20
     })
   })
 
@@ -94,9 +119,9 @@ describe('AudioSnipper Math & Helper Functions', () => {
       expect(res.endTime).toBe(13) // start + 3 = 13
     })
 
-    it('enforces maximum snippet duration of 30s', () => {
-      const res = adjustEndTimeHelper(10, 38, 5, 180)
-      expect(res.endTime).toBe(40) // start + 30 = 40
+    it('enforces maximum snippet duration of 120s', () => {
+      const res = adjustEndTimeHelper(10, 135, 5, 180)
+      expect(res.endTime).toBe(130) // start + 120 = 130
     })
 
     it('does not exceed total track duration', () => {
@@ -106,11 +131,13 @@ describe('AudioSnipper Math & Helper Functions', () => {
   })
 
   describe('applyPresetDuration', () => {
-    it('applies 5s, 10s, 15s, 30s presets', () => {
+    it('applies 5s, 10s, 15s, 30s, 45s, 60s presets', () => {
       expect(applyPresetDuration(10, 5, 180)).toEqual({ startTime: 10, endTime: 15 })
       expect(applyPresetDuration(10, 10, 180)).toEqual({ startTime: 10, endTime: 20 })
       expect(applyPresetDuration(10, 15, 180)).toEqual({ startTime: 10, endTime: 25 })
       expect(applyPresetDuration(10, 30, 180)).toEqual({ startTime: 10, endTime: 40 })
+      expect(applyPresetDuration(10, 45, 180)).toEqual({ startTime: 10, endTime: 55 })
+      expect(applyPresetDuration(10, 60, 180)).toEqual({ startTime: 10, endTime: 70 })
     })
 
     it('shifts start time if end time exceeds max duration', () => {
@@ -172,10 +199,32 @@ describe('AudioSnipper Component Rendering & Interaction', () => {
       />
     )
 
-    const preset15Btn = screen.getByRole('button', { name: /15s/i })
+    const preset15Btn = screen.getByRole('button', { name: /^15s/i })
     fireEvent.click(preset15Btn)
 
     expect(screen.getByText(/0:10.0 → 0:25.0/i)).toBeInTheDocument()
+  })
+
+  it('renders all preset duration buttons (5s, 10s, 15s, 30s, 45s, 60s) and dynamic recommendation badge', () => {
+    render(<AudioSnipper track={mockTrack} initialStartTime={0} initialEndTime={10} />)
+
+    expect(screen.getByRole('button', { name: /^5s/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^10s/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^15s/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^30s/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^45s/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^60s/i })).toBeInTheDocument()
+
+    // 10s initial duration -> 1 Scene
+    expect(screen.getAllByText(/1 Scène \(Single Take\)/i).length).toBeGreaterThan(0)
+
+    // Click 45s preset -> 3 Scenes
+    fireEvent.click(screen.getByRole('button', { name: /^45s/i }))
+    expect(screen.getAllByText(/3 Scènes \(Multi-Scene Storyboard\)/i).length).toBeGreaterThan(0)
+
+    // Click 60s preset -> 4 Scenes
+    fireEvent.click(screen.getByRole('button', { name: /^60s/i }))
+    expect(screen.getAllByText(/4 Scènes \(Full Cinematic Reel\)/i).length).toBeGreaterThan(0)
   })
 
   it('toggles loop playback when loop button is clicked', () => {

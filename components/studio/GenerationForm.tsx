@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { getAuth } from 'firebase/auth'
-import { Sparkles, Camera, Video, Disc3, Loader2, Music, Scissors } from 'lucide-react'
+import { Sparkles, Camera, Video, Disc3, Loader2, Music, Scissors, Zap, Film, Clapperboard } from 'lucide-react'
 import JackCoreSetPreview from './JackCoreSetPreview'
 import SunoTrackSelector from './SunoTrackSelector'
-import AudioSnipper from './AudioSnipper'
-import type { SunoTrack, AudioSnippet } from '@/types'
+import AudioSnipper, { getSceneRecommendation } from './AudioSnipper'
+import StoryboardDirector from './StoryboardDirector'
+import type { SunoTrack, AudioSnippet, StudioEngine } from '@/types'
 
 const ASPECT_RATIOS = ['9:16', '16:9', '1:1', '4:3', '3:4']
 
@@ -14,6 +15,7 @@ export type GenerationMode = 'photo' | 'video' | 'audiogram'
 
 interface Props {
   onJobCreated: (jobId: string, taskId: string) => void
+  onStoryboardJobCreated?: (jobId: string) => void
   linkedPostId?: string
   initialPrompt?: string
   initialTrackTitle?: string
@@ -23,12 +25,14 @@ interface Props {
 
 export default function GenerationForm({
   onJobCreated,
+  onStoryboardJobCreated,
   linkedPostId,
   initialPrompt = '',
   initialTrackTitle = '',
   initialTrackId = '',
   initialMode,
 }: Props) {
+  const [engine, setEngine] = useState<StudioEngine>('higgsfield')
   const [mode, setMode] = useState<GenerationMode>(
     initialMode || (initialTrackTitle || initialTrackId ? 'video' : 'photo')
   )
@@ -38,28 +42,30 @@ export default function GenerationForm({
   const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('1080p')
   const [duration, setDuration] = useState(5)
   const [sunoTrackId, setSunoTrackId] = useState(initialTrackId)
+  const [selectedTrack, setSelectedTrack] = useState<SunoTrack | null>(null)
   const [selectedSnippetId, setSelectedSnippetId] = useState('')
   const [selectedSnippet, setSelectedSnippet] = useState<AudioSnippet | null>(null)
   const [snippingTrack, setSnippingTrack] = useState<SunoTrack | null>(null)
+  const [showStoryboardDirector, setShowStoryboardDirector] = useState(false)
 
   // React to initial prop updates (e.g. navigation / query param changes)
   useEffect(() => {
     if (initialPrompt && !prompt) {
       setPrompt(initialPrompt)
     }
-  }, [initialPrompt])
+  }, [initialPrompt, prompt])
 
   useEffect(() => {
     if (initialTrackId && !sunoTrackId) {
       setSunoTrackId(initialTrackId)
     }
-  }, [initialTrackId])
+  }, [initialTrackId, sunoTrackId])
 
   useEffect(() => {
     if (initialMode && initialMode !== mode) {
       setMode(initialMode)
     }
-  }, [initialMode])
+  }, [initialMode, mode])
 
   // AI Assistant states
   const [generatedCaption, setGeneratedCaption] = useState<string | null>(null)
@@ -85,6 +91,7 @@ export default function GenerationForm({
     if (!trackId) {
       setSelectedSnippetId('')
       setSelectedSnippet(null)
+      setSelectedTrack(null)
     }
   }
 
@@ -92,7 +99,7 @@ export default function GenerationForm({
     if (snippet) {
       setSelectedSnippetId(snippet.id)
       setSelectedSnippet(snippet)
-      setDuration(Math.min(30, Math.max(3, Math.round(snippet.duration))))
+      setDuration(Math.min(120, Math.max(3, Math.round(snippet.duration))))
     } else {
       setSelectedSnippetId('')
       setSelectedSnippet(null)
@@ -106,7 +113,7 @@ export default function GenerationForm({
   const handleSnippetSaved = (newSnippet: AudioSnippet) => {
     setSelectedSnippetId(newSnippet.id)
     setSelectedSnippet(newSnippet)
-    setDuration(Math.min(30, Math.max(3, Math.round(newSnippet.duration))))
+    setDuration(Math.min(120, Math.max(3, Math.round(newSnippet.duration))))
     setSnippingTrack(null)
   }
 
@@ -181,6 +188,7 @@ export default function GenerationForm({
         : undefined
 
       const payload = {
+        engine,
         mode: mode === 'audiogram' ? 'video' : mode,
         videoType: mode === 'audiogram' ? 'audiogram' : mode === 'video' ? 'cinematic' : undefined,
         prompt,
@@ -220,8 +228,71 @@ export default function GenerationForm({
     }
   }
 
+  const sceneRec = getSceneRecommendation(selectedSnippet?.duration || duration)
+  const sceneCount = sceneRec.sceneCount
+
+  if (showStoryboardDirector) {
+    const activeTrack: SunoTrack = selectedTrack || {
+      id: sunoTrackId || 'custom_track',
+      name: initialTrackTitle || 'Jack Howlin Track',
+      storageUrl: '',
+      publicUrl: selectedSnippet?.publicUrl || '',
+      durationSeconds: selectedSnippet?.duration || duration || 30,
+      releaseType: 'single',
+      releaseStatus: 'released',
+      createdAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as unknown as SunoTrack['createdAt'],
+      snippets: selectedSnippet ? [selectedSnippet] : [],
+    }
+
+    return (
+      <div className="space-y-4">
+        <StoryboardDirector
+          track={activeTrack}
+          snippet={selectedSnippet}
+          onJobCreated={(jobId) => {
+            setShowStoryboardDirector(false)
+            onStoryboardJobCreated?.(jobId)
+          }}
+          onCancel={() => setShowStoryboardDirector(false)}
+        />
+      </div>
+    )
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* AI Engine Switcher */}
+      <div className="flex items-center justify-between p-2 bg-stone-900/80 border border-stone-800 rounded-lg text-xs">
+        <span className="text-stone-400 font-medium flex items-center gap-1.5 pl-1">
+          <Zap className="w-3.5 h-3.5 text-amber-500" />
+          AI Engine:
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setEngine('higgsfield')}
+            className={`px-2.5 py-1 rounded font-semibold text-[11px] transition-all ${
+              engine === 'higgsfield'
+                ? 'bg-amber-500 text-stone-950 shadow-sm font-bold'
+                : 'text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            Higgsfield AI (Soul & Veo)
+          </button>
+          <button
+            type="button"
+            onClick={() => setEngine('kie')}
+            className={`px-2.5 py-1 rounded font-semibold text-[11px] transition-all ${
+              engine === 'kie'
+                ? 'bg-amber-500 text-stone-950 shadow-sm font-bold'
+                : 'text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            Kie.ai (Seedream)
+          </button>
+        </div>
+      </div>
+
       {/* 3 Generation Modes */}
       <div className="grid grid-cols-3 gap-2">
         {[
@@ -244,6 +315,36 @@ export default function GenerationForm({
           </button>
         ))}
       </div>
+
+      {/* Prominent Multi-Scene Storyboard Director Action Button */}
+      {(mode === 'video' || (selectedSnippet && selectedSnippet.duration > 15) || duration > 15) && (
+        <div className="p-3.5 bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-amber-950/40 border border-amber-500/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/5 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
+              <Clapperboard className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <span>Multi-Scene Visual Storyboard</span>
+                <span className="text-[10px] font-semibold bg-amber-500/20 border border-amber-500/40 text-amber-300 px-1.5 py-0.5 rounded-full">
+                  {sceneCount} Scènes
+                </span>
+              </p>
+              <p className="text-[11px] text-stone-400">
+                Regisseer meerdere 35mm film takes met automatische video stitching en audio sync.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowStoryboardDirector(true)}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs tracking-wider uppercase shadow-md shadow-amber-500/20 active:scale-95 transition-all flex-shrink-0"
+          >
+            <Film className="w-3.5 h-3.5 text-stone-950" />
+            <span>Open Multi-Scene Storyboard Director ({sceneCount} Scènes)</span>
+          </button>
+        </div>
+      )}
 
       {/* Audiogram Info Box */}
       {mode === 'audiogram' && (
@@ -387,7 +488,7 @@ export default function GenerationForm({
               <input
                 type="range"
                 min={mode === 'audiogram' ? 3 : 5}
-                max={30}
+                max={120}
                 step={1}
                 value={duration}
                 onChange={(e) => setDuration(Number(e.target.value))}
@@ -407,6 +508,7 @@ export default function GenerationForm({
           onSnippetChange={handleSnippetChange}
           onOpenSnipper={handleOpenSnipper}
           initialTrackTitle={initialTrackTitle}
+          onTrackSelect={setSelectedTrack}
         />
       )}
 
