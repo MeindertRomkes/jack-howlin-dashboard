@@ -235,9 +235,10 @@ export interface SunoTrack {
   createdAt: Timestamp
   // Release metadata
   releaseType: 'single' | 'album'
-  albumName?: string        // e.g. "Outlaw Americana" (only for album tracks)
+  releaseStatus?: 'released' | 'upcoming'  // for singles: already out vs planned
+  albumName?: string        // e.g. "The Silent Cowboy" (only for album tracks)
   trackNumber?: number      // track position in album
-  releaseYear?: number      // e.g. 2024
+  releaseYear?: number      // e.g. 2025
   albumCoverUrl?: string    // optional album art image URL
 }
 

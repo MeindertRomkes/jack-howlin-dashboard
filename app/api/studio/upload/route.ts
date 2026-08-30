@@ -45,6 +45,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   } else {
     // Extract optional album metadata from form
     const releaseType = (formData.get('releaseType') as 'single' | 'album') || 'single'
+    const releaseStatus = (formData.get('releaseStatus') as 'released' | 'upcoming') || 'released'
     const albumName = (formData.get('albumName') as string) || undefined
     const trackNumberRaw = formData.get('trackNumber') as string | null
     const releaseYearRaw = formData.get('releaseYear') as string | null
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       storageUrl: `gs://jack-howlin-dashboard.firebasestorage.app/${filename}`,
       publicUrl,
       releaseType,
+      releaseStatus,
       ...(albumName ? { albumName } : {}),
       ...(trackNumberRaw ? { trackNumber: parseInt(trackNumberRaw, 10) } : {}),
       ...(releaseYearRaw ? { releaseYear: parseInt(releaseYearRaw, 10) } : {}),
