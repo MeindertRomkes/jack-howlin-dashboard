@@ -24,7 +24,7 @@ vi.mock('@/lib/firebase-admin', () => ({
 
 test('Upload route without body returns 400 Missing file or type', async () => {
   // Set dev mode to bypass auth
-  process.env.NODE_ENV = 'development'
+  Object.defineProperty(process.env, 'NODE_ENV', { value: 'development', writable: true, configurable: true })
   
   const req = new NextRequest('http://localhost/api/studio/upload', {
     method: 'POST'
@@ -37,7 +37,8 @@ test('Upload route without body returns 400 Missing file or type', async () => {
 })
 
 test('Upload route in dev mode requires no auth', async () => {
-  process.env.NODE_ENV = 'development'
+  Object.defineProperty(process.env, 'NODE_ENV', { value: 'development', writable: true, configurable: true })
+
   const formData = new FormData()
   formData.append('file', new Blob(['test'], { type: 'image/png' }), 'test.png')
   formData.append('type', 'image')
