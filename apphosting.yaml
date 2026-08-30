@@ -100,3 +100,10 @@ env:
     availability:
       - BUILD
       - RUNTIME
+
+  # ─── Fourth Wall Merch ──────────────────────────────────────────────────────
+
+  - variable: FOURTHWALL_STOREFRONT_TOKEN
+    secret: FOURTHWALL_STOREFRONT_TOKEN
+    availability:
+      - RUNTIME

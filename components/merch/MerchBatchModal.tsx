@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ShoppingBag,
   Sparkles,
@@ -8,42 +8,12 @@ import {
   X,
   RefreshCw,
   Clock,
+  Loader2,
 } from 'lucide-react'
 import { savePost } from '@/lib/firestore'
 import { Timestamp } from 'firebase/firestore'
 import type { Platform } from '@/types'
-
-interface MerchPreset {
-  name: string
-  type: string
-  song: string
-  hook: string
-  url: string
-}
-
-const MERCH_PRESETS: MerchPreset[] = [
-  {
-    name: "I Still Wear This Crown — Distressed Outlaw Cap",
-    type: "Headwear / Pet",
-    song: "I Still Wear This Crown",
-    hook: "It may be beaten up, but Jack keeps wearing it.",
-    url: "https://jackhowlin.com/products/crown-cap",
-  },
-  {
-    name: "Hate Me All You Want — Heavyweight Statement Hoodie",
-    type: "Apparel / Hoodie",
-    song: "Hate Me All You Want",
-    hook: "Talk your talk. The crown stays on.",
-    url: "https://jackhowlin.com/products/hate-me-hoodie",
-  },
-  {
-    name: "Outlaw Americana — Vintage Washed Tour Tee",
-    type: "Apparel / T-Shirt",
-    song: "Gravel Road Confessions",
-    hook: "Nobody owns this road, nobody owns my name.",
-    url: "https://jackhowlin.com/products/outlaw-tee",
-  },
-]
+import type { FourthWallProduct } from '@/app/api/merch/products/route'
 
 interface GeneratedMerchPost {
   angle: string
@@ -63,13 +33,17 @@ interface MerchBatchModalProps {
 }
 
 export default function MerchBatchModal({ isOpen, onClose, onSuccess }: MerchBatchModalProps) {
-  const [selectedPreset, setSelectedPreset] = useState<MerchPreset>(MERCH_PRESETS[0])
+  const [products, setProducts] = useState<FourthWallProduct[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(true)
+  const [productsError, setProductsError] = useState<string | null>(null)
+
+  const [selectedProduct, setSelectedProduct] = useState<FourthWallProduct | null>(null)
   const [isCustom, setIsCustom] = useState(false)
   const [customName, setCustomName] = useState('')
   const [customType, setCustomType] = useState('Apparel')
   const [customSong, setCustomSong] = useState("Jack Howlin' Original")
   const [customHook, setCustomHook] = useState('Rauw, onverzettelijk, authentiek.')
-  const [customUrl, setCustomUrl] = useState('https://jackhowlin.com')
+  const [customUrl, setCustomUrl] = useState('https://jackhowlin.fourthwall.com')
 
   const [postCount, setPostCount] = useState<number>(5)
   const [intervalDays, setIntervalDays] = useState<number>(3)
@@ -80,6 +54,25 @@ export default function MerchBatchModal({ isOpen, onClose, onSuccess }: MerchBat
   const [schedulingAll, setSchedulingAll] = useState(false)
   const [scheduleSuccess, setScheduleSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Load live Fourth Wall products
+  useEffect(() => {
+    if (!isOpen) return
+    setLoadingProducts(true)
+    setProductsError(null)
+    fetch('/api/merch/products')
+      .then(r => r.json())
+      .then((data: { products?: FourthWallProduct[]; error?: string }) => {
+        if (data.products && data.products.length > 0) {
+          setProducts(data.products)
+          setSelectedProduct(data.products[0])
+        } else {
+          setProductsError(data.error || 'Geen producten gevonden')
+        }
+      })
+      .catch(err => setProductsError(err instanceof Error ? err.message : 'Laden mislukt'))
+      .finally(() => setLoadingProducts(false))
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -102,11 +95,11 @@ export default function MerchBatchModal({ isOpen, onClose, onSuccess }: MerchBat
 
     try {
       const payload = {
-        productName: isCustom ? customName : selectedPreset.name,
-        productType: isCustom ? customType : selectedPreset.type,
-        productUrl: isCustom ? customUrl : selectedPreset.url,
-        associatedSong: isCustom ? customSong : selectedPreset.song,
-        keyHook: isCustom ? customHook : selectedPreset.hook,
+        productName: isCustom ? customName : selectedProduct?.name ?? '',
+        productType: isCustom ? customType : selectedProduct?.productType ?? '',
+        productUrl: isCustom ? customUrl : selectedProduct?.url ?? '',
+        associatedSong: isCustom ? customSong : selectedProduct?.associatedSong ?? "Jack Howlin' Original",
+        keyHook: isCustom ? customHook : selectedProduct?.keyHook ?? 'Rauw, onverzettelijk, authentiek.',
         postCount,
         intervalDays,
         platforms: selectedPlatforms,
@@ -221,33 +214,56 @@ export default function MerchBatchModal({ isOpen, onClose, onSuccess }: MerchBat
                 <label className="block text-xs font-bold text-stone-300 uppercase tracking-wider">
                   1. Kies Merch Item of Voer Custom Product in
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {MERCH_PRESETS.map((preset, idx) => (
-                    <button
-                      type="button"
-                      key={idx}
-                      onClick={() => {
-                        setSelectedPreset(preset)
-                        setIsCustom(false)
-                      }}
-                      className={`p-3.5 rounded-xl border text-left transition-all ${
-                        !isCustom && selectedPreset.name === preset.name
-                          ? 'bg-amber-500/15 border-amber-500 text-amber-300 shadow-md'
-                          : 'bg-stone-950 border-stone-800 text-stone-400 hover:border-stone-700'
-                      }`}
-                    >
-                      <span className="text-[10px] font-mono text-amber-500 block uppercase font-semibold">
-                        {preset.type}
-                      </span>
-                      <strong className="text-xs text-stone-200 block truncate mt-1">
-                        {preset.name}
-                      </strong>
-                      <span className="text-[11px] text-stone-500 block truncate mt-0.5">
-                        Track: {preset.song}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+
+                {/* Live Fourth Wall Products */}
+                {loadingProducts ? (
+                  <div className="flex items-center gap-2 text-stone-500 text-xs py-4">
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                    <span>Producten laden van Fourth Wall...</span>
+                  </div>
+                ) : productsError ? (
+                  <div className="text-xs text-red-400 bg-red-950/30 border border-red-800/40 rounded-lg p-3">
+                    ⚠ Kon producten niet laden: {productsError}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                    {products.map((product) => (
+                      <button
+                        type="button"
+                        key={product.id}
+                        onClick={() => { setSelectedProduct(product); setIsCustom(false) }}
+                        className={`rounded-xl border text-left transition-all overflow-hidden flex flex-col ${
+                          !isCustom && selectedProduct?.id === product.id
+                            ? 'border-amber-500 ring-1 ring-amber-500/40 shadow-md shadow-amber-500/10'
+                            : 'border-stone-800 hover:border-stone-700'
+                        }`}
+                      >
+                        {/* Product Image */}
+                        <div className="aspect-square w-full bg-stone-950 overflow-hidden">
+                          {product.imageUrl ? (
+                            <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <ShoppingBag className="w-6 h-6 text-stone-700" />
+                            </div>
+                          )}
+                        </div>
+                        {/* Product Info */}
+                        <div className="p-2 bg-stone-950/80 flex-1">
+                          <span className="text-[9px] font-mono text-amber-500 block uppercase font-semibold truncate">
+                            {product.productType}
+                          </span>
+                          <strong className="text-[11px] text-stone-200 block leading-tight mt-0.5" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {product.name}
+                          </strong>
+                          <span className="text-[10px] text-amber-400/80 font-bold block mt-1">
+                            ${product.price.toFixed(2)} {product.currency}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <div className="pt-1">
                   <button
@@ -412,7 +428,7 @@ export default function MerchBatchModal({ isOpen, onClose, onSuccess }: MerchBat
                     Gegenereerde Campagne
                   </span>
                   <strong className="text-sm text-stone-200">
-                    {generatedPosts.length} Multi-Angle Posts voor &ldquo;{isCustom ? customName : selectedPreset.name}&rdquo;
+                    {generatedPosts.length} Multi-Angle Posts voor &ldquo;{isCustom ? customName : selectedProduct?.name ?? ''}&rdquo;
                   </strong>
                 </div>
                 <button
