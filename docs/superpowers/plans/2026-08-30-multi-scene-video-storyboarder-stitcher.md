@@ -185,7 +185,7 @@ git commit -m "feat(api): add video stitcher endpoint for multi-scene assets"
 **Interfaces:**
 - Produces: `POST /api/studio/storyboard/create` $\rightarrow$ `{ storyboardJobId: string, taskIds: string[] }`
 
-- [ ] **Step 1: Write test for storyboard creation & task dispatch**
+- [x] **Step 1: Write test for storyboard creation & task dispatch**
 
 Create `tests/api/storyboard-create.test.ts`:
 ```typescript
@@ -202,19 +202,19 @@ describe('Storyboard Create API', () => {
 })
 ```
 
-- [ ] **Step 2: Run test**
+- [x] **Step 2: Run test**
 
 Run: `npx vitest run tests/api/storyboard-create.test.ts`
 
-- [ ] **Step 3: Implement `app/api/studio/storyboard/create/route.ts`**
+- [x] **Step 3: Implement `app/api/studio/storyboard/create/route.ts`**
 
 Fetches `Jack Core Set`, creates tasks via `createKieTask` for each scene with Seedance 2.5, creates `storyboard_jobs` record with child scene task IDs.
 
-- [ ] **Step 4: Run test to verify**
+- [x] **Step 4: Run test to verify**
 
 Run: `npx vitest run tests/api/storyboard-create.test.ts`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/api/studio/storyboard/create/route.ts tests/api/storyboard-create.test.ts
@@ -232,7 +232,7 @@ git commit -m "feat(api): add storyboard multi-scene creation orchestrator endpo
 **Interfaces:**
 - Produces: `<StoryboardDirector track={track} snippet={snippet} onJobCreated={(jobId) => void} onCancel={() => void} />`
 
-- [ ] **Step 1: Write test for StoryboardDirector component**
+- [x] **Step 1: Write test for StoryboardDirector component**
 
 Create `tests/components/StoryboardDirector.test.tsx`:
 ```typescript
@@ -251,11 +251,11 @@ describe('StoryboardDirector shot calculations', () => {
 })
 ```
 
-- [ ] **Step 2: Run test**
+- [x] **Step 2: Run test**
 
 Run: `npx vitest run tests/components/StoryboardDirector.test.tsx`
 
-- [ ] **Step 3: Implement `components/studio/StoryboardDirector.tsx`**
+- [x] **Step 3: Implement `components/studio/StoryboardDirector.tsx`**
 
 Build:
 - Header with track name, total duration badge (e.g. `37s Total`), and scene count badge (`3 Film Shots`).
@@ -269,11 +269,11 @@ Build:
 - Caption & hashtags preview box.
 - `[🎬 Start Multi-Scene Generatie]` launch button.
 
-- [ ] **Step 4: Run test to verify**
+- [x] **Step 4: Run test to verify**
 
 Run: `npx vitest run tests/components/StoryboardDirector.test.tsx`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add components/studio/StoryboardDirector.tsx tests/components/StoryboardDirector.test.tsx
