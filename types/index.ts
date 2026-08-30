@@ -271,3 +271,32 @@ export interface JackCoreSetPhoto {
   order: number
   createdAt: Timestamp
 }
+
+export interface StoryboardScene {
+  index: number
+  duration: number
+  shotType: 'wide' | 'medium' | 'closeup' | 'drone' | 'pov'
+  prompt: string
+  cameraMotion?: string
+  taskId?: string
+  state: 'waiting' | 'generating' | 'success' | 'fail'
+  resultVideoUrl?: string
+  failMsg?: string
+}
+
+export interface StoryboardJob {
+  id: string
+  sunoTrackId?: string
+  snippetId?: string
+  totalDuration: number
+  aspectRatio: string
+  audioUrl: string
+  scenes: StoryboardScene[]
+  state: 'storyboarding' | 'rendering_scenes' | 'stitching' | 'success' | 'fail'
+  masterResultUrl?: string
+  captionSuggestion?: string
+  linkedPostId?: string
+  failMsg?: string
+  createdAt: Timestamp
+  completedAt?: Timestamp
+}

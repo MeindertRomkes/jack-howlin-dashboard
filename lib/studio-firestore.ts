@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from './firebase-admin'
-import type { KieJob, MediaAsset, SunoTrack, JackCoreSetPhoto, AudioSnippet } from '@/types'
+import type { KieJob, MediaAsset, SunoTrack, JackCoreSetPhoto, AudioSnippet, StoryboardJob, StoryboardScene } from '@/types'
 
 export async function getJackCoreSet(): Promise<JackCoreSetPhoto[]> {
   const snap = await adminDb.collection('jack_core_set').orderBy('order', 'asc').get()
@@ -93,4 +93,28 @@ export async function getMediaLibrary(limitCount = 50): Promise<MediaAsset[]> {
 
 export async function linkMediaAssetToPost(assetId: string, postId: string): Promise<void> {
   await adminDb.collection('media_library').doc(assetId).update({ linkedPostId: postId })
+}
+
+export async function createStoryboardJob(
+  data: Omit<StoryboardJob, 'id' | 'createdAt'>
+): Promise<string> {
+  const ref = await adminDb.collection('storyboard_jobs').add({
+    ...data,
+    createdAt: FieldValue.serverTimestamp(),
+  })
+  return ref.id
+}
+
+export async function updateStoryboardJob(id: string, update: Partial<StoryboardJob>): Promise<void> {
+  await adminDb.collection('storyboard_jobs').doc(id).update({
+    ...update,
+    ...(update.state === 'success' || update.state === 'fail'
+      ? { completedAt: FieldValue.serverTimestamp() } : {}),
+  })
+}
+
+export async function getStoryboardJob(id: string): Promise<StoryboardJob | null> {
+  const snap = await adminDb.collection('storyboard_jobs').doc(id).get()
+  if (!snap.exists) return null
+  return { id: snap.id, ...snap.data() } as StoryboardJob
 }
