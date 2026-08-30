@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { POST } from '../../app/api/studio/storyboard/suggest/route'
 import {
-  POST,
   splitDuration,
   cleanCaption,
   generateStoryboardFallback,
-} from '../../app/api/studio/storyboard/suggest/route'
+} from '@/lib/storyboard-helpers'
 import { NextRequest } from 'next/server'
 import { adminAuth } from '@/lib/firebase-admin'
 

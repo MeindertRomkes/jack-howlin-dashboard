@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { POST } from '../../app/api/studio/stitch/route'
 import {
-  POST,
   validateStitchInput,
   resolveMasterVideoUrl,
-  StitchRequestBody,
-} from '../../app/api/studio/stitch/route'
+  type StitchRequestBody,
+} from '@/lib/storyboard-helpers'
 import { NextRequest } from 'next/server'
 import { adminAuth } from '@/lib/firebase-admin'
 import { createMediaAsset, updateStoryboardJob } from '@/lib/studio-firestore'

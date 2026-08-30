@@ -3,79 +3,12 @@ import { adminAuth } from '@/lib/firebase-admin'
 import { createKieTask } from '@/lib/kie'
 import { getJackCoreSet, createStoryboardJob } from '@/lib/studio-firestore'
 import type { StoryboardScene } from '@/types'
-
-export type ShotType = 'wide' | 'medium' | 'closeup' | 'drone' | 'pov'
-
-export interface StoryboardCreateSceneInput {
-  index?: number
-  duration: number
-  shotType: ShotType
-  prompt: string
-  cameraMotion?: string
-}
-
-export interface StoryboardCreateRequest {
-  sunoTrackId?: string
-  snippetId?: string
-  totalDuration: number
-  aspectRatio?: string
-  audioUrl: string
-  scenes: StoryboardCreateSceneInput[]
-  captionSuggestion?: string
-  linkedPostId?: string
-}
-
-export interface StoryboardCreateResponse {
-  success: boolean
-  storyboardJobId: string
-  taskIds: string[]
-  scenes: StoryboardScene[]
-}
-
-export function validateStoryboardCreateInput(body: unknown): { valid: boolean; error?: string } {
-  if (!body || typeof body !== 'object') {
-    return { valid: false, error: 'Request body must be a JSON object' }
-  }
-  const candidate = body as Partial<StoryboardCreateRequest>
-
-  if (!candidate.audioUrl || typeof candidate.audioUrl !== 'string' || !candidate.audioUrl.trim()) {
-    return { valid: false, error: 'audioUrl is required and must be a non-empty string' }
-  }
-
-  if (!Array.isArray(candidate.scenes) || candidate.scenes.length === 0) {
-    return { valid: false, error: 'scenes must be a non-empty array' }
-  }
-
-  for (let i = 0; i < candidate.scenes.length; i++) {
-    const scene = candidate.scenes[i]
-    if (!scene || typeof scene !== 'object') {
-      return { valid: false, error: `Scene at index ${i} is invalid` }
-    }
-    if (typeof scene.prompt !== 'string' || !scene.prompt.trim()) {
-      return { valid: false, error: `Scene at index ${i} must have a non-empty prompt` }
-    }
-    if (typeof scene.duration !== 'number' || scene.duration <= 0 || !Number.isFinite(scene.duration)) {
-      return { valid: false, error: `Scene at index ${i} must have a positive numeric duration` }
-    }
-  }
-
-  return { valid: true }
-}
-
-export function buildScenePrompt(prompt: string, cameraMotion?: string, referenceUrls: string[] = []): string {
-  const trimmedPrompt = prompt.trim()
-  const refPrefix = referenceUrls.length > 0
-    ? `Reference ${referenceUrls.map((_, i) => `@Image${i + 1}`).join(' ')} for the character appearance. `
-    : ''
-  let combined = `${refPrefix}${trimmedPrompt}`
-  if (cameraMotion && cameraMotion.trim()) {
-    if (!/[.!?]$/.test(combined)) {
-      combined += '.'
-    }
-    combined += ` Camera motion: ${cameraMotion.trim()}`
-  }
-  return combined
-}
+import {
+  type StoryboardCreateRequest,
+  type StoryboardCreateResponse,
+  validateStoryboardCreateInput,
+  buildScenePrompt,
+} from '@/lib/storyboard-helpers'
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {

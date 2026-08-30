@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { POST } from '../../app/api/studio/storyboard/create/route'
 import {
-  POST,
   validateStoryboardCreateInput,
   buildScenePrompt,
-  StoryboardCreateRequest,
-} from '../../app/api/studio/storyboard/create/route'
+  type StoryboardCreateRequest,
+} from '@/lib/storyboard-helpers'
 import { NextRequest } from 'next/server'
 import { adminAuth } from '@/lib/firebase-admin'
 import { createKieTask } from '@/lib/kie'

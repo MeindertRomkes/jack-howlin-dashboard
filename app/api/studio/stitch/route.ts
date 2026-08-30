@@ -1,45 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebase-admin'
 import { createMediaAsset, updateStoryboardJob } from '@/lib/studio-firestore'
-
-export interface StitchRequestBody {
-  sceneUrls: string[]
-  audioUrl?: string
-  storyboardJobId?: string
-  captionSuggestion?: string
-  sunoTrackId?: string
-  snippetId?: string
-  linkedPostId?: string
-}
-
-/**
- * Validates that sceneUrls is a non-empty array of non-empty string URLs.
- */
-export function validateStitchInput(sceneUrls: string[], _audioUrl?: string): boolean {
-  if (!Array.isArray(sceneUrls) || sceneUrls.length === 0) {
-    return false
-  }
-  return sceneUrls.every(
-    (url) => typeof url === 'string' && url.trim().length > 0
-  )
-}
-
-/**
- * Resolves the master video URL:
- * - If single scene, returns the single scene video URL.
- * - If multiple scenes, resolves/generates the stitched master video URL in Firebase Storage.
- */
-export function resolveMasterVideoUrl(sceneUrls: string[], storyboardJobId?: string): string {
-  if (sceneUrls.length === 1) {
-    return sceneUrls[0]
-  }
-
-  if (storyboardJobId) {
-    return `https://firebasestorage.googleapis.com/v0/b/jack-howlin-dashboard.firebasestorage.app/o/stitched%2F${encodeURIComponent(storyboardJobId)}_master.mp4?alt=media`
-  }
-
-  return `https://firebasestorage.googleapis.com/v0/b/jack-howlin-dashboard.firebasestorage.app/o/stitched%2Fmaster_${Date.now()}.mp4?alt=media`
-}
+import {
+  type StitchRequestBody,
+  validateStitchInput,
+  resolveMasterVideoUrl,
+} from '@/lib/storyboard-helpers'
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {

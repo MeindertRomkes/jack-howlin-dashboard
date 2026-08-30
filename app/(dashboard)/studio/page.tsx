@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import { Clapperboard, AlertCircle, X } from 'lucide-react'
 import GenerationForm, { GenerationMode } from '@/components/studio/GenerationForm'
 import GenerationStatus from '@/components/studio/GenerationStatus'
+import StoryboardProgress from '@/components/studio/StoryboardProgress'
 import MediaLibrary from '@/components/studio/MediaLibrary'
 
 function StudioPageContent() {
@@ -12,8 +13,10 @@ function StudioPageContent() {
   const promptSuggestion = searchParams.get('promptSuggestion') || searchParams.get('prompt') || undefined
   const trackId = searchParams.get('trackId') || undefined
   const modeParam = searchParams.get('mode') as GenerationMode | null
+  const storyboardJobIdParam = searchParams.get('storyboardJobId') || null
 
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
+  const [activeStoryboardJobId, setActiveStoryboardJobId] = useState<string | null>(storyboardJobIdParam)
   const [newResultUrls, setNewResultUrls] = useState<string[]>([])
   const [generationError, setGenerationError] = useState<string | null>(null)
 
@@ -30,6 +33,7 @@ function StudioPageContent() {
 
   const handleError = useCallback((message: string) => {
     setActiveJobId(null)
+    setActiveStoryboardJobId(null)
     setGenerationError(message)
   }, [])
 
@@ -61,6 +65,18 @@ function StudioPageContent() {
               jobId={activeJobId}
               onComplete={handleComplete}
               onError={handleError}
+            />
+          )}
+
+          {activeStoryboardJobId && (
+            <StoryboardProgress
+              jobId={activeStoryboardJobId}
+              onComplete={(url) => {
+                setActiveStoryboardJobId(null)
+                setNewResultUrls([url])
+              }}
+              onError={handleError}
+              onCancel={() => setActiveStoryboardJobId(null)}
             />
           )}
 
