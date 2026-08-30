@@ -136,7 +136,7 @@ git commit -m "feat(api): add Gemini storyboard scene director endpoint"
 **Interfaces:**
 - Produces: `POST /api/studio/stitch` $\rightarrow$ `{ success: boolean, masterUrl: string, mediaAssetId: string }`
 
-- [ ] **Step 1: Write test for stitch endpoint**
+- [x] **Step 1: Write test for stitch endpoint**
 
 Create `tests/api/studio-stitch.test.ts`:
 ```typescript
@@ -155,19 +155,19 @@ describe('Studio Stitch API verification', () => {
 })
 ```
 
-- [ ] **Step 2: Run test**
+- [x] **Step 2: Run test**
 
 Run: `npx vitest run tests/api/studio-stitch.test.ts`
 
-- [ ] **Step 3: Implement `app/api/studio/stitch/route.ts`**
+- [x] **Step 3: Implement `app/api/studio/stitch/route.ts`**
 
 Create endpoint that takes `sceneUrls`, `audioUrl`, `captionSuggestion`, `storyboardJobId`, registers the concatenated asset in `media_library`, updates `storyboard_jobs` with `masterResultUrl` and `state: 'success'`.
 
-- [ ] **Step 4: Run test to verify passes**
+- [x] **Step 4: Run test to verify passes**
 
 Run: `npx vitest run tests/api/studio-stitch.test.ts`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/api/studio/stitch/route.ts tests/api/studio-stitch.test.ts
