@@ -16,7 +16,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const formData = await req.formData()
+  let formData: FormData
+  try {
+    formData = await req.formData()
+  } catch {
+    return NextResponse.json({ error: 'Missing file or type' }, { status: 400 })
+  }
   const file = formData.get('file') as File | null
   const uploadType = formData.get('type') as UploadType | null
   const label = (formData.get('label') as string) || 'Referentie'
