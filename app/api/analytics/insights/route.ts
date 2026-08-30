@@ -122,7 +122,7 @@ export async function POST() {
 
     // Call Gemini with real analytics context
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
     const prompt = `You are the Lead Intelligence Strategist for Jack Howlin', a modern Outlaw Americana music artist.
 Jack's Brand: The outlaw who refuses to bow. Weathered, cinematic, authentic, confident, never apologetic.

@@ -51,7 +51,7 @@ export interface VoiceHistory {
   chosenReply: string
   platform: Platform
   videoTitle: string
-  timestamp: Timestamp
+  timestamp: any
 }
 
 export interface SyncState {
@@ -127,7 +127,7 @@ export interface PlatformMetricOverview {
 
 export interface AnalyticsSnapshot {
   id?: string
-  timestamp: Timestamp
+  timestamp: any
   period: 'daily' | 'weekly' | 'manual'
   totalCrossPlatformViews: number
   totalCommentsCount: number
@@ -172,7 +172,7 @@ export interface ActionablePlaybookItem {
 
 export interface IntelligenceReport {
   id?: string
-  generatedAt: Timestamp
+  generatedAt: any
   summary: string
   winningHooks: Array<{
     hookTitle: string

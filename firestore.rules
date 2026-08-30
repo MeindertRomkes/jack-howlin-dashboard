@@ -1,8 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Default: only owner can read/write everything
     match /{document=**} {
-      // NOTE: Replace REPLACE_WITH_YOUR_GOOGLE_EMAIL with your actual Google account email before deploying.
       allow read, write: if request.auth != null && request.auth.token.email == 'romkesmeindert@gmail.com';
     }
 
@@ -22,5 +22,13 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if false;
     }
+    // Analytics & intelligence — owner read/write (reads happen client-side after login)
+    match /analytics_snapshots/{docId} {
+      allow read, write: if request.auth != null && request.auth.token.email == 'romkesmeindert@gmail.com';
+    }
+    match /system/{docId} {
+      allow read, write: if request.auth != null && request.auth.token.email == 'romkesmeindert@gmail.com';
+    }
   }
 }
+
