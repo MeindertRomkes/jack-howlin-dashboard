@@ -19,14 +19,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    let body: any
+    let body: Record<string, unknown> | null = null
     try {
       body = await req.json()
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    const { action, trackId, snippet, snippetId } = body || {}
+    interface SnippetPayload {
+      name?: string
+      startTime?: number | string
+      endTime?: number | string
+      highlightLyric?: string
+    }
+
+    const action = body?.action as string | undefined
+    const trackId = body?.trackId as string | undefined
+    const snippet = body?.snippet as SnippetPayload | undefined
+    const snippetId = body?.snippetId as string | undefined
 
     if (!trackId) {
       return NextResponse.json({ error: 'trackId is required' }, { status: 400 })
@@ -64,7 +74,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         startTime,
         endTime,
         duration,
-        highlightLyric: snippet.highlightLyric?.trim() || undefined,
+        highlightLyric: typeof snippet.highlightLyric === 'string' ? snippet.highlightLyric.trim() || undefined : undefined,
       })
 
       return NextResponse.json({ success: true, snippetId: newSnippetId }, { status: 200 })
@@ -80,7 +90,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Server error' }, { status: 500 })
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Server error' },
+      { status: 500 }
+    )
   }
 }

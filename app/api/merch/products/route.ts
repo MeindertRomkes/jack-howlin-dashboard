@@ -30,14 +30,15 @@ function inferSong(name: string): string {
   return "Jack Howlin' Original"
 }
 
-function inferHook(name: string, productType: string): string {
+function inferHook(name: string, productType?: string): string {
   const n = name.toLowerCase()
+  const p = (productType || '').toLowerCase()
   if (n.includes('hate me')) return 'Talk your talk. The crown stays on.'
-  if (n.includes('hoodie')) return 'Wrap yourself in the outlaw spirit. Built for the long road.'
-  if (n.includes('tee') || n.includes('t-shirt') || n.includes('crewneck')) return 'Wear the story. Every thread tells it.'
-  if (n.includes('cap') || n.includes('hat')) return 'The hat that never bows. Neither do you.'
-  if (n.includes('poster')) return 'Frame the outlaw. Own the wall.'
-  if (n.includes('mug')) return 'Start the day like an outlaw. No apologies.'
+  if (n.includes('hoodie') || p.includes('hoodie')) return 'Wrap yourself in the outlaw spirit. Built for the long road.'
+  if (n.includes('tee') || n.includes('t-shirt') || n.includes('crewneck') || p.includes('apparel')) return 'Wear the story. Every thread tells it.'
+  if (n.includes('cap') || n.includes('hat') || p.includes('headwear')) return 'The hat that never bows. Neither do you.'
+  if (n.includes('poster') || p.includes('art')) return 'Frame the outlaw. Own the wall.'
+  if (n.includes('mug') || p.includes('drinkware')) return 'Start the day like an outlaw. No apologies.'
   if (n.includes('tank')) return 'No sleeves. No filter. Pure Jack.'
   return 'Rauw, onverzettelijk, authentiek.'
 }

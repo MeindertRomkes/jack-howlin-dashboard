@@ -189,8 +189,8 @@ export default function ScheduleModal({ asset, onClose, onScheduled }: ScheduleM
 
       onScheduled?.(postId)
       onClose()
-    } catch (err: any) {
-      setError(err?.message || 'Er is een fout opgetreden bij het inplannen')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Er is een fout opgetreden bij het inplannen')
     } finally {
       setSubmitting(false)
     }

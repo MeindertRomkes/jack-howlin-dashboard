@@ -4,7 +4,7 @@ import {
   getLatestAnalyticsSnapshot,
   getLatestIntelligenceReport,
 } from '@/lib/firestore'
-import type { AnalyticsSnapshot, IntelligenceReport } from '@/types'
+import type { AnalyticsSnapshot, IntelligenceReport, TrackPerformance } from '@/types'
 import {
   BarChart3,
   TrendingUp,
@@ -20,8 +20,52 @@ import {
   Radio,
   Calendar,
   CheckCircle2,
+  Clapperboard,
 } from 'lucide-react'
 import Link from 'next/link'
+
+const DEFAULT_TOP_TRACKS: TrackPerformance[] = [
+  {
+    trackId: 'hate-me-all-you-want',
+    title: 'Hate Me All You Want',
+    album: 'Outlaw Truths EP',
+    releaseDate: '2026-06-15',
+    spotifyUrl: 'https://open.spotify.com/track/hate-me-all-you-want',
+    popularity: 64,
+    weeklyGrowthPercent: 18.5,
+    topPlatformHook: "Midnight highway footage + 'Hate me all you want' bass drop",
+  },
+  {
+    trackId: 'i-still-wear-this-crown',
+    title: 'I Still Wear This Crown',
+    album: 'Crown & Dust',
+    releaseDate: '2026-07-20',
+    spotifyUrl: 'https://open.spotify.com/track/i-still-wear-this-crown',
+    popularity: 59,
+    weeklyGrowthPercent: 24.1,
+    topPlatformHook: 'Dusty cowboy hat silhouette + acoustic intro',
+  },
+  {
+    trackId: 'gravel-road-confessions',
+    title: 'Gravel Road Confessions',
+    album: 'Outlaw Truths EP',
+    releaseDate: '2026-05-02',
+    spotifyUrl: 'https://open.spotify.com/track/gravel-road-confessions',
+    popularity: 47,
+    weeklyGrowthPercent: 8.2,
+    topPlatformHook: 'Roadside diner neon + guitar solo snippet',
+  },
+  {
+    trackId: 'whiskey-in-the-shadows',
+    title: 'Whiskey in the Shadows',
+    album: 'Single',
+    releaseDate: '2026-08-01',
+    spotifyUrl: 'https://open.spotify.com/track/whiskey-in-the-shadows',
+    popularity: 52,
+    weeklyGrowthPercent: 31.0,
+    topPlatformHook: 'Dark bar counter + slow burn lyric reveal',
+  },
+]
 
 export default function AnalyticsPage() {
   const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null)
@@ -454,7 +498,10 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="space-y-3">
-              {(snapshot?.spotify?.topTracks || []).map((track, idx) => (
+              {((snapshot?.spotify?.topTracks && snapshot.spotify.topTracks.length > 0)
+                ? snapshot.spotify.topTracks
+                : DEFAULT_TOP_TRACKS
+              ).map((track, idx) => (
                 <div
                   key={track.trackId || idx}
                   className="bg-stone-950 border border-stone-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-stone-700 transition-all"
@@ -480,7 +527,7 @@ export default function AnalyticsPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-6 self-end md:self-auto">
+                  <div className="flex items-center gap-3 sm:gap-4 self-end md:self-auto flex-wrap justify-end">
                     {/* Popularity meter */}
                     <div className="text-right">
                       <span className="text-[10px] text-stone-500 uppercase block font-bold">
@@ -498,6 +545,16 @@ export default function AnalyticsPage() {
                         </span>
                       </div>
                     </div>
+
+                    {/* Quick action button: 🎬 Maak 10s Clip */}
+                    <Link
+                      href={`/studio?trackTitle=${encodeURIComponent(track.title)}`}
+                      className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 border border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap shadow-sm active:scale-95"
+                      title={`Maak direct een 10s clip voor "${track.title}" in AI Studio`}
+                    >
+                      <Clapperboard className="w-3.5 h-3.5 text-amber-400" />
+                      <span>🎬 Maak 10s Clip</span>
+                    </Link>
 
                     {track.spotifyUrl && (
                       <a

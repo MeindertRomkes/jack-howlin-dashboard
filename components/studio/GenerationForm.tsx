@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { getAuth } from 'firebase/auth'
 import { Sparkles, Camera, Video, Disc3, Loader2, Music, Scissors } from 'lucide-react'
 import JackCoreSetPreview from './JackCoreSetPreview'
@@ -16,19 +16,50 @@ interface Props {
   onJobCreated: (jobId: string, taskId: string) => void
   linkedPostId?: string
   initialPrompt?: string
+  initialTrackTitle?: string
+  initialTrackId?: string
+  initialMode?: GenerationMode
 }
 
-export default function GenerationForm({ onJobCreated, linkedPostId, initialPrompt = '' }: Props) {
-  const [mode, setMode] = useState<GenerationMode>('photo')
+export default function GenerationForm({
+  onJobCreated,
+  linkedPostId,
+  initialPrompt = '',
+  initialTrackTitle = '',
+  initialTrackId = '',
+  initialMode,
+}: Props) {
+  const [mode, setMode] = useState<GenerationMode>(
+    initialMode || (initialTrackTitle || initialTrackId ? 'video' : 'photo')
+  )
   const [prompt, setPrompt] = useState(initialPrompt)
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [quality, setQuality] = useState<'basic' | 'high'>('high')
   const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('1080p')
   const [duration, setDuration] = useState(5)
-  const [sunoTrackId, setSunoTrackId] = useState('')
+  const [sunoTrackId, setSunoTrackId] = useState(initialTrackId)
   const [selectedSnippetId, setSelectedSnippetId] = useState('')
   const [selectedSnippet, setSelectedSnippet] = useState<AudioSnippet | null>(null)
   const [snippingTrack, setSnippingTrack] = useState<SunoTrack | null>(null)
+
+  // React to initial prop updates (e.g. navigation / query param changes)
+  useEffect(() => {
+    if (initialPrompt && !prompt) {
+      setPrompt(initialPrompt)
+    }
+  }, [initialPrompt])
+
+  useEffect(() => {
+    if (initialTrackId && !sunoTrackId) {
+      setSunoTrackId(initialTrackId)
+    }
+  }, [initialTrackId])
+
+  useEffect(() => {
+    if (initialMode && initialMode !== mode) {
+      setMode(initialMode)
+    }
+  }, [initialMode])
 
   // AI Assistant states
   const [generatedCaption, setGeneratedCaption] = useState<string | null>(null)
@@ -126,8 +157,8 @@ export default function GenerationForm({ onJobCreated, linkedPostId, initialProm
       if (Array.isArray(data.hashtags)) {
         setGeneratedHashtags(data.hashtags)
       }
-    } catch (err: any) {
-      setError(err?.message || 'AI prompt generatie mislukt')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'AI prompt generatie mislukt')
     } finally {
       setAiLoading(false)
     }
@@ -375,6 +406,7 @@ export default function GenerationForm({ onJobCreated, linkedPostId, initialProm
           selectedSnippetId={selectedSnippetId}
           onSnippetChange={handleSnippetChange}
           onOpenSnipper={handleOpenSnipper}
+          initialTrackTitle={initialTrackTitle}
         />
       )}
 

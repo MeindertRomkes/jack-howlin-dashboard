@@ -592,8 +592,12 @@ export default function SunoLibraryManager() {
     setActiveSnipperTrackId(null)
   }
 
-  function handleSnippetSaved(trackId: string, snippet: AudioSnippet) {
-    setExpandedSnippetTracks((prev) => new Set(prev).add(trackId))
+  function handleSnippetSaved(trackId: string, snippet?: AudioSnippet) {
+    if (snippet?.name) {
+      setExpandedSnippetTracks((prev) => new Set(prev).add(trackId))
+    } else {
+      setExpandedSnippetTracks((prev) => new Set(prev).add(trackId))
+    }
     setActiveSnipperTrackId(null)
   }
 
@@ -645,8 +649,8 @@ export default function SunoLibraryManager() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Verwijderen van snippet is mislukt')
       }
-    } catch (err: any) {
-      alert(err.message || 'Fout bij verwijderen snippet')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Fout bij verwijderen snippet')
     } finally {
       setDeletingSnippetId(null)
     }

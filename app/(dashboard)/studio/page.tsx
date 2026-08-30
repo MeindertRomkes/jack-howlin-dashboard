@@ -1,11 +1,18 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Clapperboard, AlertCircle, X } from 'lucide-react'
-import GenerationForm from '@/components/studio/GenerationForm'
+import GenerationForm, { GenerationMode } from '@/components/studio/GenerationForm'
 import GenerationStatus from '@/components/studio/GenerationStatus'
 import MediaLibrary from '@/components/studio/MediaLibrary'
 
-export default function StudioPage() {
+function StudioPageContent() {
+  const searchParams = useSearchParams()
+  const trackTitle = searchParams.get('trackTitle') || searchParams.get('songTitle') || searchParams.get('trackName') || undefined
+  const promptSuggestion = searchParams.get('promptSuggestion') || searchParams.get('prompt') || undefined
+  const trackId = searchParams.get('trackId') || undefined
+  const modeParam = searchParams.get('mode') as GenerationMode | null
+
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [newResultUrls, setNewResultUrls] = useState<string[]>([])
   const [generationError, setGenerationError] = useState<string | null>(null)
@@ -41,7 +48,13 @@ export default function StudioPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <div className="p-6 bg-stone-900/40 border border-stone-800/60 rounded-xl space-y-4">
           <h2 className="text-sm font-bold text-stone-300 tracking-wider uppercase">Nieuwe generatie</h2>
-          <GenerationForm onJobCreated={handleJobCreated} />
+          <GenerationForm
+            onJobCreated={handleJobCreated}
+            initialTrackTitle={trackTitle}
+            initialPrompt={promptSuggestion}
+            initialTrackId={trackId}
+            initialMode={modeParam || undefined}
+          />
 
           {activeJobId && (
             <GenerationStatus
@@ -77,3 +90,22 @@ export default function StudioPage() {
     </div>
   )
 }
+
+export default function StudioPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-8 animate-pulse">
+          <div className="h-14 bg-stone-900 border border-stone-800 rounded-xl" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-96 bg-stone-900 border border-stone-800 rounded-xl" />
+            <div className="h-96 bg-stone-900 border border-stone-800 rounded-xl" />
+          </div>
+        </div>
+      }
+    >
+      <StudioPageContent />
+    </Suspense>
+  )
+}
+

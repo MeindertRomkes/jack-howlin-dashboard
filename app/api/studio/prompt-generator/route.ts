@@ -187,8 +187,8 @@ Return ONLY a valid JSON object matching this schema:
 
       let cleanedHashtags: string[] = []
       if (Array.isArray(parsedData.hashtags) && parsedData.hashtags.length > 0) {
-        cleanedHashtags = parsedData.hashtags
-          .filter((h: any) => typeof h === 'string' && h.trim().length > 0)
+        cleanedHashtags = (parsedData.hashtags as unknown[])
+          .filter((h): h is string => typeof h === 'string' && h.trim().length > 0)
           .map((h: string) => {
             const trimmed = h.trim()
             return trimmed.startsWith('#') ? trimmed : `#${trimmed}`
@@ -211,8 +211,11 @@ Return ONLY a valid JSON object matching this schema:
       console.warn('Gemini generation failed, using fallback:', genErr)
       return NextResponse.json(fallback, { status: 200 })
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Studio prompt generator error:', err)
-    return NextResponse.json({ error: err?.message || 'Server error' }, { status: 500 })
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Server error' },
+      { status: 500 }
+    )
   }
 }

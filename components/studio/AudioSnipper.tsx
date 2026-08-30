@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useState, useRef, useMemo, useCallback } from 'react'
 import { getAuth } from 'firebase/auth'
 import {
   Play,
@@ -347,15 +347,15 @@ export default function AudioSnipper({
         duration,
         highlightLyric: highlightLyric.trim() || undefined,
         publicUrl: track.publicUrl,
-        createdAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as any,
+        createdAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as unknown as AudioSnippet['createdAt'],
       }
 
       setSuccessMsg(`Snippet "${name}" succesvol opgeslagen!`)
       if (onSnippetSaved) {
         onSnippetSaved(newSnippet)
       }
-    } catch (err: any) {
-      setError(err.message || 'Opslaan van snippet is mislukt')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Opslaan van snippet is mislukt')
     } finally {
       setIsSaving(false)
     }

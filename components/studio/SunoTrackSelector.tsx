@@ -12,6 +12,7 @@ export interface Props {
   selectedSnippetId?: string
   onSnippetChange?: (snippet: AudioSnippet | null) => void
   onOpenSnipper?: (track: SunoTrack) => void
+  initialTrackTitle?: string
 }
 
 export default function SunoTrackSelector({
@@ -20,6 +21,7 @@ export default function SunoTrackSelector({
   selectedSnippetId,
   onSnippetChange,
   onOpenSnipper,
+  initialTrackTitle,
 }: Props) {
   const [tracks, setTracks] = useState<SunoTrack[]>([])
 
@@ -29,6 +31,21 @@ export default function SunoTrackSelector({
       setTracks(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SunoTrack))
     })
   }, [])
+
+  // Auto-match track by initialTrackTitle when tracks load and value is not yet set
+  useEffect(() => {
+    if (initialTrackTitle && !value && tracks.length > 0) {
+      const match = tracks.find(
+        (t) =>
+          t.name.toLowerCase() === initialTrackTitle.toLowerCase() ||
+          t.name.toLowerCase().includes(initialTrackTitle.toLowerCase()) ||
+          initialTrackTitle.toLowerCase().includes(t.name.toLowerCase())
+      )
+      if (match) {
+        onChange(match.id)
+      }
+    }
+  }, [initialTrackTitle, value, tracks, onChange])
 
   const selectedTrack = useMemo(() => {
     return tracks.find((t) => t.id === value) || null
