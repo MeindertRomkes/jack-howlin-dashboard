@@ -233,6 +233,12 @@ export interface SunoTrack {
   publicUrl: string
   durationSeconds?: number
   createdAt: Timestamp
+  // Release metadata
+  releaseType: 'single' | 'album'
+  albumName?: string        // e.g. "Outlaw Americana" (only for album tracks)
+  trackNumber?: number      // track position in album
+  releaseYear?: number      // e.g. 2024
+  albumCoverUrl?: string    // optional album art image URL
 }
 
 export interface JackCoreSetPhoto {

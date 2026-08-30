@@ -43,7 +43,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const existing = await getJackCoreSet()
     id = await addJackCoreSetPhoto({ label, storageUrl: `gs://jack-howlin-dashboard.firebasestorage.app/${filename}`, publicUrl, order: existing.length })
   } else {
-    id = await addSunoTrack({ name: label, storageUrl: `gs://jack-howlin-dashboard.firebasestorage.app/${filename}`, publicUrl })
+    // Extract optional album metadata from form
+    const releaseType = (formData.get('releaseType') as 'single' | 'album') || 'single'
+    const albumName = (formData.get('albumName') as string) || undefined
+    const trackNumberRaw = formData.get('trackNumber') as string | null
+    const releaseYearRaw = formData.get('releaseYear') as string | null
+
+    id = await addSunoTrack({
+      name: label,
+      storageUrl: `gs://jack-howlin-dashboard.firebasestorage.app/${filename}`,
+      publicUrl,
+      releaseType,
+      ...(albumName ? { albumName } : {}),
+      ...(trackNumberRaw ? { trackNumber: parseInt(trackNumberRaw, 10) } : {}),
+      ...(releaseYearRaw ? { releaseYear: parseInt(releaseYearRaw, 10) } : {}),
+    })
   }
 
   return NextResponse.json({ id, publicUrl })
