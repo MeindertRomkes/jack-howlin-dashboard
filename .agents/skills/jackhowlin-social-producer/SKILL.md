@@ -8,7 +8,7 @@ description: Use when creating, brainstorming, producing, or scheduling social m
 ## 🤠 Overview
 De **Jack Howlin Social Producer** is de interactieve creatieve en strategische engine voor het produceren van hoogwaardige social media posts en videocontent voor Outlaw Country-Rock artiest **Jack Howlin**.
 
-De skill bewaakt 100% gezichts- en kledingconsistentie via de **Jack Core Set**, integreert **ByteDance Seedream 5 Pro** en **Seedance 2.5** via Kie.ai, adviseert op basis van historische dashboard analytics, en plant goedgekeurde posts in op de contentkalender.
+De skill bewaakt 100% gezichts- en kledingconsistentie via de **Jack Core Set**, integreert **ByteDance Seedream 5 Pro** en **Seedance 2.5** via Kie.ai (met beeld- én audioreferenties), adviseert op basis van historische dashboard analytics, en plant goedgekeurde posts in op de contentkalender.
 
 ---
 
@@ -24,54 +24,51 @@ De skill bewaakt 100% gezichts- en kledingconsistentie via de **Jack Core Set**,
 
 ```
 ┌───────────────────────────┐
-│ 1. Brainstorm & Advies    │◄── Vraag formaat, doel, platform & stijl (3 presets)
+│ 1. Brainstorm & Advies    │◄── Vraag formaat, doel, platform, stijl & track
 └─────────────┬─────────────┘
               ▼
 ┌───────────────────────────┐
-│ 2. Data & Audio Selectie  │◄── Koppel top-retentie hook & audiofragment
+│ 2. Audio Snipping & Host  │◄── Knip snippet & upload naar Firebase Storage
 └─────────────┬─────────────┘
               ▼
 ┌───────────────────────────┐
-│ 3. Core Set Koppeling     │◄── Injecteer Jack Core Set referentie-URLs
+│ 3. Core Set Still (S5Pro) │◄── Genereer 4K Ankerbeeld via Seedream 5 Pro
 └─────────────┬─────────────┘
               ▼
 ┌───────────────────────────┐
-│ 4. Kie.ai Generatie       │◄── Seedream 5 Pro (foto) / Seedance 2.5 (video)
+│ 4. Seedance 2.5 AI Video  │◄── Genereer video met reference_image + reference_audio
 └─────────────┬─────────────┘
               ▼
 ┌───────────────────────────┐
-│ 5. Mastering & Fallback   │◄── Audio sync via FFmpeg (lossless fades + grain)
+│ 5. Mastering & Remuxing   │◄── Mux 1080x1920 MP4 met 48kHz stereo master audio & grain
 └─────────────┬─────────────┘
               ▼
 ┌───────────────────────────┐
-│ 6. Goedkeuring & Kalender │◄── Finale review en planning via /api/posts
-└───────────────────────────┘
+│ 6. Goedkeuring & Kalender │◄── Finale review en planning via schedule-post.js
+└─────────────┬─────────────┘
 ```
 
 ---
 
-## 💬 1. De Consultatievragen (Stap voor Stap)
-
-Vraag de gebruiker gericht naar de gewenste insteek en presenteer concrete opties:
+## 💬 1. De Consultatievragen & Track Context
 
 1. **Formaat & Type:**
    * Foto (Seedream 5 Pro) of Video (Seedance 2.5)?
-   * Aspect Ratio: `9:16 Vertical` (Reels/TikTok), `1:1 Square` (Feed), of `16:9 Landscape`.
-2. **Data-Gedreven Suggesties (Dashboard Analytics):**
-   * Raadpleeg `references/data-intelligence-matrix.md` en deel relevante trends (bijv. *"Highway visuals met de bas-drop scoren momenteel 84% retentie"*).
+   * Aspect Ratio: `9:16 Vertical` (Reels/TikTok/Shorts), `1:1 Square` (Feed), of `16:9 Landscape`.
+2. **Data-Gedreven Suggesties:**
+   * Raadpleeg `references/data-intelligence-matrix.md` (bijv. *"Highway visuals met de bas-drop scoren momenteel 84% retentie"*).
 3. **Muziek & Fragment:**
    * Welke track uit Jack's catalogus (*Hate Me All You Want*, *I Still Wear This Crown*, *Whiskey & Rust*)?
-   * Welk fragment (Intro Hook, Verse Build, Chorus Drop, Acoustic Outro)?
+   * *Let op:* Nummers zoals *Hate Me All You Want* zijn al een tijd uit; behandel ze als gevestigde outlaw anthems/live staples in de caption.
 4. **Vocal Performance Modus:**
-   * **A-Roll Lip-Sync:** Jack zingt de tekst met expressieve mond- en gitaarbewegingen.
-   * **Atmospheric Mood (Niet zingen):** Jack zwijgt stoïcijns (mond dicht), subtiele ademhaling, wind in haar/jas, intense blik in de lens.
+   * **Modus 1 (A-Roll Lip-Sync):** Jack zingt met mond- en gitaarbewegingen.
+   * **Modus 2 (Atmospheric Outlaw Mood):** Jack zwijgt stoïcijns (mond dicht), ademt rustig, wind in haar/jas, intense blik in de lens.
 5. **Visuele Stijlpresets:**
-   * Presenteer de 3 uitgewerkte presets uit `references/style-presets.md`:
-     1. **Midnight Highway Noir:** Mistige nachtweg, vintage truck, verre neon diner gloed.
-     2. **Dark Studio Analog:** Warme amberkleurige buizenversterkers, Shure 55SH microfoon.
-     3. **Outlaw Saloon Grit:** Donkere tavern, kerosinelamp, whiskey & gitaarkoffer.
-6. **On-Screen Hook, Caption & Merch CTA:**
-   * Schrijf 2 caption varianten conform `references/brand-voice.md`.
+   * **1. Midnight Highway Noir:** Mistige nachtweg, pick-up truck, neon diner glow.
+   * **2. Dark Studio Analog:** Warme amber studio, buizenversterkers, vintage Shure microfoon.
+   * **3. Outlaw Saloon Grit:** Donkere tavern, kerosinelamp, whiskey & gitaarkoffer.
+6. **Captions:**
+   * Genereer 2 outlaw varianten conform `references/brand-voice.md`.
 
 ---
 
@@ -94,62 +91,63 @@ Vraag de gebruiker gericht naar de gewenste insteek en presenteer concrete optie
 $env:KIE_AI_API_KEY="your-api-key"
 npm run kie -- bytedance_seedream_image \
   --prompt "<stijl_prompt_uit_style_presets>" \
-  --image_urls "<jack_core_set_url>" \
   --version 5-pro \
   --aspect_ratio 9:16 \
   --quality high
 ```
 
-### B. Video Generatie (ByteDance Seedance 2.5)
+### B. Video Generatie met Audio & Beeldreferentie (ByteDance Seedance 2.5)
+> [!NOTE]
+> `first_frame_url` en `reference_image_urls` zijn **mutually exclusive** in Seedance 2.5. Gebruik `reference_image_urls` samen met `reference_audio_urls` voor het beste gesynchroniseerde resultaat.
+
 ```bash
+# 1. Knip audio en verkrijg publieke URL:
+node .agents/skills/jackhowlin-social-producer/scripts/snip-audio.js --input "master.wav" --output "snip.mp3" --start "00:00:30" --duration 10
+node .agents/skills/jackhowlin-social-producer/scripts/upload-audio.js --input "snip.mp3"
+
+# 2. Start Seedance 2.5 met audio en ankerbeeld:
 $env:KIE_AI_API_KEY="your-api-key"
 npm run kie -- bytedance_seedance_video \
-  --prompt "<video_prompt_uit_style_presets>" \
-  --first_frame_url "<seedream_still_url>" \
-  --reference_image_urls "<jack_core_set_url>" \
+  --prompt "Cinematic atmospheric 9:16 vertical video. Jack Howlin leans against his vintage black pickup truck on the midnight desert highway..." \
+  --reference_image_urls "<seedream_5_pro_still_url>" \
+  --reference_audio_urls "<firebase_public_audio_url>" \
   --duration 10 \
-  --resolution 720p
+  --resolution 720p \
+  --aspect_ratio 9:16
 ```
 
 ---
 
 ## 🛠️ 4. Lokale Bundled Tooling & Mastering
 
-De skill beschikt over ingebouwde scripts voor directe bewerking:
-
 1. **Audio Knippen met Fades:**
    ```bash
    node .agents/skills/jackhowlin-social-producer/scripts/snip-audio.js \
      --input "projects/hate-me-all-you-want/audio/master-hate-me-all-you-want.wav" \
-     --output "projects/hate-me-social-visualizer/audio_snip.wav" \
+     --output "projects/hate-me-social-production/hate_me_drop_10s.wav" \
      --start "00:00:30" \
-     --duration 15
+     --duration 10
    ```
 
-2. **Video & Audio Muxing (met Smart Fallback):**
+2. **Video Muxing met Master Audio & 35mm Grain:**
    ```bash
-   # Modus A: Video + Audio Muxing
    node .agents/skills/jackhowlin-social-producer/scripts/mux-social-video.js \
-     --video "raw_seedance.mp4" \
-     --audio "audio_snip.wav" \
-     --output "final_social.mp4"
+     --video "seedance_raw.mp4" \
+     --audio "hate_me_drop_10s.wav" \
+     --output "jack_howlin_final.mp4"
+   ```
 
-   # Modus B: 2.5D Geanimeerde Parallax Fallback (bij ontoereikend videosaldo)
-   node .agents/skills/jackhowlin-social-producer/scripts/mux-social-video.js \
-     --image "still_seedream5.jpg" \
-     --audio "audio_snip.wav" \
-     --output "final_social_fallback.mp4" \
-     --duration 15
+3. **Direct Inplannen in Kalender:**
+   ```bash
+   node .agents/skills/jackhowlin-social-producer/scripts/schedule-post.js \
+     --media "jack_howlin_final.mp4" \
+     --caption "Still screaming this every single night on the road. Hate me all you want. The crown stays on. ⚡" \
+     --title "Hate Me All You Want — Midnight Highway" \
+     --platforms "instagram,tiktok,youtube" \
+     --datetime "2026-08-31T19:45:00"
    ```
 
 ---
 
-## 📅 5. Finale Review & Kalender Planning
-
-1. Toon het eindresultaat aan de gebruiker:
-   * **Beeld/Video Preview:** Lokale bestandslocatie.
-   * **Audio Segment:** Tijdcode en tracktitel.
-   * **Gekozen Caption & Hashtags.**
-   * **Voorgestelde Publicatiedatum & Tijd (CET Prime Time).**
-2. Vraag expliciete goedkeuring van de gebruiker.
-3. Plan de post in via de Dashboard Content Calendar (`/calendar` via `POST /api/posts`).
+## 📅 5. Finale Review & Kalender Status
+Wanneer de gebruiker goedkeuring geeft, voert de agent `schedule-post.js` uit om de post definitief vast te leggen in de Dashboard Content Calendar (`/calendar` via Firestore `posts` collectie).
