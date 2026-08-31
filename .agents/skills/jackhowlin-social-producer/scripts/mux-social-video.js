@@ -3,7 +3,7 @@
  * scripts/mux-social-video.js
  * Muxes video of stilbeeld met audio naar een perfecte 1080x1920 9:16 vertical MP4.
  *
- * Modus 1 (Video Muxing):
+ * Modus 1 (Video Muxing met Auto-Looping & Audio Mapping):
  *   node mux-social-video.js --video input.mp4 --audio snippet.wav --output final.mp4
  *
  * Modus 2 (Smart Fallback Still Animation):
@@ -23,7 +23,7 @@ function parseArgs() {
     audio: '',
     output: '',
     duration: 15,
-    crf: 22,
+    crf: 20,
     fps: 30
   };
 
@@ -44,7 +44,7 @@ const params = parseArgs();
 
 if ((!params.video && !params.image) || !params.audio || !params.output) {
   console.error('Fout: Geef (--video OF --image) EN --audio EN --output mee.');
-  console.error('Voorbeeld: node mux-social-video.js --image still.jpg --audio snippet.wav --output final.mp4 --duration 15');
+  console.error('Voorbeeld: node mux-social-video.js --video raw.mp4 --audio snippet.wav --output final.mp4');
   process.exit(1);
 }
 
@@ -67,16 +67,32 @@ if (params.video) {
     process.exit(1);
   }
 
-  console.log(`Muxen video + audio: ${videoPath} + ${audioPath} -> ${outputPath}`);
+  console.log(`Muxen video + audio (met stream loop & explicit audio mapping):`);
+  console.log(`Video: ${videoPath}`);
+  console.log(`Audio: ${audioPath}`);
+  console.log(`Output: ${outputPath}`);
+
+  const filter = [
+    'scale=1080:1920:force_original_aspect_ratio=increase',
+    'crop=1080:1920',
+    'noise=alls=8:allf=t+u',
+    'eq=contrast=1.03:brightness=0.01:saturation=1.05'
+  ].join(',');
+
   ffmpegArgs = [
     '-y',
+    '-stream_loop', '-1',
     '-i', videoPath,
     '-i', audioPath,
+    '-map', '0:v:0',
+    '-map', '1:a:0',
+    '-vf', filter,
     '-c:v', 'libx264',
     '-crf', params.crf.toString(),
-    '-preset', 'veryfast',
+    '-preset', 'slow',
+    '-pix_fmt', 'yuv420p',
     '-c:a', 'aac',
-    '-b:a', '192k',
+    '-b:a', '320k',
     '-movflags', '+faststart',
     '-shortest',
     outputPath
@@ -105,13 +121,15 @@ if (params.video) {
     '-loop', '1',
     '-i', imagePath,
     '-i', audioPath,
+    '-map', '0:v:0',
+    '-map', '1:a:0',
     '-vf', videoFilter,
     '-c:v', 'libx264',
     '-crf', params.crf.toString(),
     '-preset', 'veryfast',
     '-pix_fmt', 'yuv420p',
     '-c:a', 'aac',
-    '-b:a', '192k',
+    '-b:a', '320k',
     '-t', params.duration.toString(),
     '-movflags', '+faststart',
     '-shortest',
