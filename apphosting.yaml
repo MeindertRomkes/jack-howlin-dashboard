@@ -7,6 +7,11 @@ runConfig:
   memoryMiB: 512
 
 env:
+  - variable: NODE_OPTIONS
+    value: --max-old-space-size=4096
+    availability:
+      - BUILD
+
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     value: AIzaSyDqBbQX45dqRmBkmXKbQdGGpmui0LYYGHs
     availability:
