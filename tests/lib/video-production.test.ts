@@ -1,6 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import fs from 'fs'
 import path from 'path'
+import { EventEmitter } from 'events'
+
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>()
+  const mockSpawn = vi.fn((command: string, args: string[]) => {
+    const child: any = new EventEmitter()
+    child.stdout = new EventEmitter()
+    child.stderr = new EventEmitter()
+    setTimeout(() => {
+      if (args && args.includes('text2image_soul_v2')) {
+        child.stdout.emit('data', Buffer.from(JSON.stringify({ result_url: 'https://cdn.example.com/still.jpg' })))
+      } else if (args && args.includes('veo3_1_lite')) {
+        child.stdout.emit('data', Buffer.from(JSON.stringify({ result_url: 'https://cdn.example.com/clip.mp4' })))
+      } else {
+        child.stdout.emit('data', Buffer.from(JSON.stringify([])))
+      }
+      child.emit('close', 0)
+    }, 5)
+    return child
+  })
+
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      spawn: mockSpawn,
+    },
+    spawn: mockSpawn,
+  }
+})
+
 import {
   SCENE_DEFINITIONS,
   downloadFile,
@@ -12,7 +43,6 @@ import {
   getFfmpegPath,
 } from '@/lib/video-production'
 import * as studioFirestore from '@/lib/studio-firestore'
-import * as higgsfield from '@/lib/higgsfield'
 
 describe('lib/video-production.ts', () => {
   beforeEach(() => {
@@ -64,18 +94,6 @@ describe('lib/video-production.ts', () => {
 
   describe('generateSceneStills', () => {
     it('generates stills for all 5 scenes', async () => {
-      vi.spyOn(higgsfield, 'createHiggsfieldImageTask').mockResolvedValue({
-        request_id: 'task_img_123',
-        status: 'queued',
-      })
-
-      vi.spyOn(higgsfield, 'getHiggsfieldTaskStatus').mockResolvedValue({
-        requestId: 'task_img_123',
-        status: 'completed',
-        state: 'success',
-        resultUrls: ['https://cdn.example.com/still.jpg'],
-      })
-
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         arrayBuffer: async () => new ArrayBuffer(8),
@@ -100,18 +118,6 @@ describe('lib/video-production.ts', () => {
 
   describe('renderSceneClips', () => {
     it('renders video clips for all stills', async () => {
-      vi.spyOn(higgsfield, 'createHiggsfieldVideoTask').mockResolvedValue({
-        request_id: 'task_vid_123',
-        status: 'queued',
-      })
-
-      vi.spyOn(higgsfield, 'getHiggsfieldTaskStatus').mockResolvedValue({
-        requestId: 'task_vid_123',
-        status: 'completed',
-        state: 'success',
-        resultUrls: ['https://cdn.example.com/clip.mp4'],
-      })
-
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         arrayBuffer: async () => new ArrayBuffer(8),
@@ -134,7 +140,9 @@ describe('lib/video-production.ts', () => {
       expect(clips[0]).toContain('scene-1-clip.mp4')
 
       // Clean up
-      if (fs.existsSync(clips[0])) fs.unlinkSync(clips[0])
+      for (const c of clips) {
+        if (fs.existsSync(c)) fs.unlinkSync(c)
+      }
       if (fs.existsSync(outDir)) fs.rmdirSync(outDir)
     })
   })

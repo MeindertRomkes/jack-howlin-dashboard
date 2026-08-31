@@ -110,7 +110,7 @@ export async function createHiggsfieldImageTask(
 
   // Otherwise standard Soul text-to-image
   const endpoint = `${BASE_URL}/higgsfield-ai/soul/standard`
-  const resolution = params.resolution === '720p' ? '720p' : '1080p'
+  const resolution = params.resolution || '1080p'
   const body = {
     prompt: params.prompt,
     num_images: 1,
