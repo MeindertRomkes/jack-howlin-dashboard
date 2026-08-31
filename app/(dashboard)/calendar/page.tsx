@@ -25,6 +25,7 @@ function CalendarPageInner() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [showCampaignModal, setShowCampaignModal] = useState(false)
   const [showMerchModal, setShowMerchModal] = useState(false)
   const [generateModalPostId, setGenerateModalPostId] = useState<string | null>(null)
@@ -43,7 +44,7 @@ function CalendarPageInner() {
     loadPosts().catch(console.error)
   }, [])
 
-  // Open modals via query params (from dashboard buttons)
+  // Open modals or select post via query params
   useEffect(() => {
     if (searchParams.get('openCampaign') === 'true') {
       setShowCampaignModal(true)
@@ -51,7 +52,14 @@ function CalendarPageInner() {
     if (searchParams.get('newPost') === 'true') {
       setShowModal(true)
     }
-  }, [searchParams])
+    const postIdParam = searchParams.get('postId')
+    if (postIdParam && posts.length > 0) {
+      const found = posts.find(p => p.id === postIdParam)
+      if (found) {
+        setSelectedPost(found)
+      }
+    }
+  }, [searchParams, posts])
 
   function prevMonth() {
     if (month === 0) {
@@ -69,6 +77,10 @@ function CalendarPageInner() {
     } else {
       setMonth(m => m + 1)
     }
+  }
+
+  function handleSelectPost(post: Post) {
+    setSelectedPost(post)
   }
 
   return (
@@ -156,16 +168,34 @@ function CalendarPageInner() {
             </div>
           </div>
         ) : (
-          <CalendarGrid year={year} month={month} posts={posts} onGenerateVisual={setGenerateModalPostId} />
+          <CalendarGrid
+            year={year}
+            month={month}
+            posts={posts}
+            onGenerateVisual={setGenerateModalPostId}
+            onSelectPost={handleSelectPost}
+          />
         )}
       </div>
 
-      {/* Modals */}
+      {/* New Post Modal */}
       {showModal && (
         <PostModal
           onClose={() => setShowModal(false)}
           onSaved={() => {
             setShowModal(false)
+            loadPosts().catch(console.error)
+          }}
+        />
+      )}
+
+      {/* Existing Post Edit/View Modal */}
+      {selectedPost && (
+        <PostModal
+          post={selectedPost}
+          onClose={() => setSelectedPost(null)}
+          onSaved={() => {
+            setSelectedPost(null)
             loadPosts().catch(console.error)
           }}
         />
@@ -216,6 +246,7 @@ function CalendarPageInner() {
     </div>
   )
 }
+
 export default function CalendarPage() {
   return (
     <Suspense fallback={

@@ -2,7 +2,8 @@
 import { useRef, useState, useEffect } from 'react'
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebase'
-import type { Platform } from '@/types'
+import type { Platform, Post } from '@/types'
+import { Timestamp } from 'firebase/firestore'
 import {
   Sparkles,
   UploadCloud,
@@ -18,9 +19,13 @@ import {
   CheckCircle2,
   Wand2,
   Share2,
+  Trash2,
+  Copy,
+  Check,
 } from 'lucide-react'
 
 interface PostModalProps {
+  post?: Post | null
   onClose: () => void
   onSaved: () => void
 }
@@ -123,21 +128,73 @@ const AI_QUICK_IDEAS = [
   { label: '🎬 Behind The Scenes', prompt: 'Behind the scenes in the analog studio tracking vocals and vintage tube amps' },
 ]
 
-export default function PostModal({ onClose, onSaved }: PostModalProps) {
+function parsePostDate(scheduledAt: unknown): Date | null {
+  if (!scheduledAt) return null
+  if (scheduledAt instanceof Date) return scheduledAt
+  if (scheduledAt instanceof Timestamp) return scheduledAt.toDate()
+  if (
+    typeof scheduledAt === 'object' &&
+    scheduledAt !== null &&
+    'toDate' in scheduledAt &&
+    typeof (scheduledAt as { toDate: () => Date }).toDate === 'function'
+  ) {
+    return (scheduledAt as { toDate: () => Date }).toDate()
+  }
+  if (
+    typeof scheduledAt === 'object' &&
+    scheduledAt !== null &&
+    'seconds' in scheduledAt &&
+    typeof (scheduledAt as { seconds: number }).seconds === 'number'
+  ) {
+    return new Date((scheduledAt as { seconds: number }).seconds * 1000)
+  }
+  if (typeof scheduledAt === 'string' || typeof scheduledAt === 'number') {
+    const d = new Date(scheduledAt)
+    return isNaN(d.getTime()) ? null : d
+  }
+  return null
+}
+
+function toDatetimeLocal(d: Date | null): string {
+  if (!d) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const year = d.getFullYear()
+  const month = pad(d.getMonth() + 1)
+  const day = pad(d.getDate())
+  const hours = pad(d.getHours())
+  const minutes = pad(d.getMinutes())
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
+  const isEditing = Boolean(post?.id)
+
   // Form State
-  const [platforms, setPlatforms] = useState<Platform[]>(['instagram', 'facebook'])
-  const [caption, setCaption] = useState('')
-  const [title, setTitle] = useState('')
-  const [tags, setTags] = useState('')
-  const [scheduledAt, setScheduledAt] = useState('')
+  const [platforms, setPlatforms] = useState<Platform[]>(
+    post?.platforms?.length ? post.platforms : ['instagram', 'facebook']
+  )
+  const [caption, setCaption] = useState(post?.caption || '')
+  const [title, setTitle] = useState(post?.title || '')
+  const [tags, setTags] = useState(Array.isArray(post?.tags) ? post.tags.join(', ') : '')
+  const [scheduledAt, setScheduledAt] = useState(() => {
+    const d = parsePostDate(post?.scheduledAt)
+    return d ? toDatetimeLocal(d) : ''
+  })
   const [activeTab, setActiveTab] = useState<'compose' | 'preview'>('compose')
-  const [previewPlatform, setPreviewPlatform] = useState<Platform>('instagram')
+  const [previewPlatform, setPreviewPlatform] = useState<Platform>(
+    post?.platforms?.[0] || 'instagram'
+  )
 
   // Media State
   const [mediaFile, setMediaFile] = useState<File | null>(null)
-  const [mediaPreview, setMediaPreview] = useState<string | null>(null)
-  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null)
+  const [mediaPreview, setMediaPreview] = useState<string | null>(post?.mediaUrl || null)
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(
+    post?.mediaType || (post?.mediaUrl?.includes('.mp4') ? 'video' : post?.mediaUrl ? 'image' : null)
+  )
+  const [existingMediaUrl, setExistingMediaUrl] = useState<string | null>(post?.mediaUrl || null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // AI Auto-Pilot State
@@ -193,6 +250,7 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
     setMediaFile(null)
     setMediaPreview(null)
     setMediaType(null)
+    setExistingMediaUrl(null)
     setUploadProgress(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
     setPlatforms(['facebook'])
@@ -300,24 +358,36 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
 
     setSaving(true)
     try {
-      let mediaUrl: string | null = null
+      let finalMediaUrl: string | null = existingMediaUrl
       if (mediaFile) {
-        mediaUrl = await uploadMedia(mediaFile)
+        finalMediaUrl = await uploadMedia(mediaFile)
       }
 
-      await fetch('/api/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platforms,
-          caption,
-          title: title.trim() || undefined,
-          tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-          scheduledAt,
-          mediaUrl,
-          mediaType: mediaUrl ? mediaType : null,
-        }),
-      })
+      const payload = {
+        platforms,
+        caption,
+        title: title.trim() || undefined,
+        tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        scheduledAt,
+        mediaUrl: finalMediaUrl,
+        mediaType: finalMediaUrl ? mediaType : null,
+      }
+
+      if (isEditing && post?.id) {
+        const res = await fetch(`/api/posts/${post.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error('Kon post niet bijwerken')
+      } else {
+        const res = await fetch('/api/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error('Kon post niet opslaan')
+      }
 
       onSaved()
     } catch (err) {
@@ -326,6 +396,32 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
       setSaving(false)
       setUploadProgress(null)
     }
+  }
+
+  async function handleDelete() {
+    if (!post?.id || deleting) return
+    if (!window.confirm('Weet je zeker dat je deze ingeplande post wilt verwijderen?')) return
+
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/posts/${post.id}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error('Kon post niet verwijderen')
+      onSaved()
+    } catch (err) {
+      console.error('Delete post error:', err)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  function copyPostLink() {
+    if (!post?.id) return
+    const url = `${window.location.origin}/calendar?postId=${post.id}`
+    navigator.clipboard.writeText(url)
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2500)
   }
 
   const captionLimit = Math.min(
@@ -360,12 +456,36 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
               <Share2 className="w-4 h-4" />
             </div>
             <div>
-              <h2 id="post-modal-title" className="text-base font-bold tracking-wider text-stone-100 flex items-center gap-2">
-                Nieuwe Post Publiceren
-              </h2>
-              <p className="text-xs text-stone-400">
-                Multi-platform automation studio
-              </p>
+              <div className="flex items-center gap-2">
+                <h2 id="post-modal-title" className="text-sm font-extrabold tracking-wider uppercase text-stone-100">
+                  {isEditing ? 'Post Details & Bewerken' : 'Nieuwe Social Post'}
+                </h2>
+                {post?.status && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase border ${
+                    post.status === 'posted'
+                      ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                      : post.status === 'failed'
+                      ? 'bg-red-950 text-red-400 border-red-800'
+                      : 'bg-amber-950 text-amber-400 border-amber-800'
+                  }`}>
+                    {post.status}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-[11px] text-stone-400">
+                  {isEditing ? `ID: ${post?.id}` : 'Multi-platform social studio'}
+                </p>
+                {isEditing && (
+                  <button
+                    onClick={copyPostLink}
+                    className="flex items-center gap-1 text-[10px] text-amber-500 hover:text-amber-400 font-semibold transition-colors"
+                  >
+                    {copiedLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedLink ? 'Link gekopieerd!' : 'Kopieer link'}</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1017,12 +1137,24 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
 
         {/* Modal Footer */}
         <div className="px-6 py-4 bg-stone-950 border-t border-stone-800 flex items-center justify-between sticky bottom-0 z-20">
-          <button
-            onClick={onClose}
-            className="px-4 py-2.5 text-xs tracking-wider uppercase text-stone-400 hover:text-stone-200 font-semibold"
-          >
-            Annuleren
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2.5 text-xs tracking-wider uppercase text-stone-400 hover:text-stone-200 font-semibold"
+            >
+              Sluiten
+            </button>
+            {isEditing && (
+              <button
+                onClick={handleDelete}
+                disabled={deleting || saving}
+                className="px-3.5 py-2 text-xs tracking-wider uppercase text-red-400 hover:bg-red-950/40 border border-red-800/50 rounded-lg font-semibold transition-colors flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deleting ? 'Verwijderen...' : 'Post Verwijderen'}
+              </button>
+            )}
+          </div>
 
           <button
             onClick={handleSave}
@@ -1037,7 +1169,7 @@ export default function PostModal({ onClose, onSaved }: PostModalProps) {
             ) : (
               <>
                 <Calendar className="w-4 h-4" />
-                Post Inplannen
+                {isEditing ? 'Wijzigingen Opslaan' : 'Post Inplannen'}
               </>
             )}
           </button>

@@ -1,7 +1,7 @@
 'use client'
 import type { Post } from '@/types'
 import { Timestamp } from 'firebase/firestore'
-import { Clapperboard } from 'lucide-react'
+import { Clapperboard, Video, Image as ImageIcon } from 'lucide-react'
 
 const PLATFORM_COLORS: Record<string, string> = {
   youtube: 'bg-red-500/20 text-red-300 border-red-500/30',
@@ -15,6 +15,7 @@ interface CalendarGridProps {
   year: number
   month: number
   onGenerateVisual?: (postId: string) => void
+  onSelectPost?: (post: Post) => void
 }
 
 // Robust helper to parse Firestore Timestamp / String / Object into JavaScript Date
@@ -45,7 +46,13 @@ function parsePostDate(scheduledAt: unknown): Date | null {
   return null
 }
 
-export default function CalendarGrid({ posts = [], year, month, onGenerateVisual }: CalendarGridProps) {
+export default function CalendarGrid({
+  posts = [],
+  year,
+  month,
+  onGenerateVisual,
+  onSelectPost,
+}: CalendarGridProps) {
   const firstDayOfWeek = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   // Monday-first: Sunday (0) becomes 6, Mon-Sat become 0-5
@@ -96,7 +103,7 @@ export default function CalendarGrid({ posts = [], year, month, onGenerateVisual
           return (
             <div
               key={i}
-              className={`min-h-[115px] p-2 border-b border-r last:border-r-0 border-stone-800 transition-colors ${
+              className={`min-h-[125px] p-2 border-b border-r last:border-r-0 border-stone-800 transition-colors ${
                 day !== null ? 'bg-stone-900/60 hover:bg-stone-900/90' : 'bg-stone-950/30'
               }`}
             >
@@ -125,16 +132,20 @@ export default function CalendarGrid({ posts = [], year, month, onGenerateVisual
                         ? post.platforms
                         : ['youtube']
 
+                      const hasMedia = Boolean(post.mediaUrl)
+                      const isVideo = post.mediaType === 'video' || (typeof post.mediaUrl === 'string' && post.mediaUrl.includes('.mp4'))
+
                       return (
                         <div
                           key={post.id || j}
-                          className="text-[11px] bg-stone-950 border border-stone-800/80 p-1.5 rounded-lg shadow-sm group hover:border-stone-700 transition-all"
+                          onClick={() => onSelectPost?.(post)}
+                          className="text-[11px] bg-stone-950 border border-stone-800/80 p-2 rounded-lg shadow-sm group hover:border-amber-500/60 hover:bg-stone-900/80 transition-all cursor-pointer"
                         >
                           <div className="flex items-center gap-1 mb-1 flex-wrap">
                             {platformList.map(p => (
                               <span
                                 key={p}
-                                className={`text-[11px] px-1.5 py-0.5 rounded font-bold uppercase border ${
+                                className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase border ${
                                   PLATFORM_COLORS[p] ?? 'bg-stone-800 text-stone-400 border-stone-700'
                                 }`}
                               >
@@ -153,18 +164,37 @@ export default function CalendarGrid({ posts = [], year, month, onGenerateVisual
                               </span>
                             )}
                           </div>
-                          <p className="text-stone-300 truncate font-medium">
+
+                          <p className="text-stone-200 truncate font-semibold group-hover:text-amber-300 transition-colors">
                             {post.title || post.caption || 'Ingeplande post'}
                           </p>
-                          {onGenerateVisual && post.id && (
+
+                          {hasMedia ? (
+                            <div className="flex items-center justify-between gap-1 mt-1.5 pt-1.5 border-t border-stone-800/60">
+                              <span className={`flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                                isVideo
+                                  ? 'text-amber-400 bg-amber-950/40 border-amber-800/40'
+                                  : 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40'
+                              }`}>
+                                {isVideo ? <Video className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
+                                <span>{isVideo ? 'Video gekoppeld' : 'Visual gekoppeld'}</span>
+                              </span>
+                              <span className="text-[10px] text-stone-500 group-hover:text-amber-400 transition-colors">
+                                Details &rarr;
+                              </span>
+                            </div>
+                          ) : onGenerateVisual && post.id ? (
                             <button
-                              onClick={() => onGenerateVisual(post.id!)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-amber-600/10 border border-amber-500/30 text-amber-400 hover:bg-amber-600/20 transition-colors mt-1.5 w-full"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onGenerateVisual(post.id!)
+                              }}
+                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-amber-600/10 border border-amber-500/30 text-amber-400 hover:bg-amber-600/20 transition-colors mt-1.5 w-full"
                             >
                               <Clapperboard className="w-3.5 h-3.5" />
                               Visual genereren
                             </button>
-                          )}
+                          ) : null}
                         </div>
                       )
                     })}
