@@ -1,14 +1,14 @@
 'use client'
-import { useEffect, use } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function CalendarPostRedirectPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: { id: string }
 }) {
   const router = useRouter()
-  const { id } = use(params)
+  const id = params?.id
 
   useEffect(() => {
     if (id) {

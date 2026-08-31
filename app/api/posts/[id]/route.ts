@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { adminDb } from '@/lib/firebase-admin'
+import { adminAuth, adminDb } from '@/lib/firebase-admin'
 import { Timestamp } from 'firebase-admin/firestore'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  const isDev = process.env.NODE_ENV === 'development'
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!isDev) {
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    try { await adminAuth.verifyIdToken(token) } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  }
+
   try {
-    const { id } = await params
+    const { id } = params
     const docSnap = await adminDb.collection('posts').doc(id).get()
 
     if (!docSnap.exists) {
@@ -24,10 +33,19 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  const isDev = process.env.NODE_ENV === 'development'
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!isDev) {
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    try { await adminAuth.verifyIdToken(token) } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  }
+
   try {
-    const { id } = await params
+    const { id } = params
     const body = await req.json()
 
     const updateData: Record<string, unknown> = {
@@ -56,10 +74,19 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
+  const isDev = process.env.NODE_ENV === 'development'
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!isDev) {
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    try { await adminAuth.verifyIdToken(token) } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  }
+
   try {
-    const { id } = await params
+    const { id } = params
     await adminDb.collection('posts').doc(id).delete()
     return NextResponse.json({ success: true, id })
   } catch (err) {
