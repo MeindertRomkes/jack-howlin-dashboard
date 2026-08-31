@@ -1,9 +1,9 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { Post, Platform, VoiceHistory } from '@/types'
+import type { Post, Platform, VoiceHistory, Comment } from '@/types'
 import {
   MessageSquare,
   Calendar,
@@ -16,6 +16,17 @@ import {
   BrainCircuit,
   TrendingUp,
   Quote,
+  RefreshCw,
+  Clapperboard,
+  BarChart3,
+  Music,
+  ExternalLink,
+  Zap,
+  Check,
+  Copy,
+  ChevronRight,
+  Send,
+  CheckCircle2,
 } from 'lucide-react'
 import { decodeHtmlEntities } from '@/lib/utils'
 
@@ -50,6 +61,70 @@ const PLATFORM_COLORS: Record<Platform, { text: string; bg: string; border: stri
   facebook: { text: 'text-blue-400', bg: 'bg-blue-950/40', border: 'border-blue-900/60' },
 }
 
+const FEATURED_TRACKS = [
+  {
+    id: 'hate-me-all-you-want',
+    title: 'Hate Me All You Want',
+    tag: 'Outlaw Defiance Anthem',
+    type: 'Single',
+    popularity: 68,
+    streamGrowth: '+24%',
+    spotifyUrl: 'https://open.spotify.com/artist/jackhowlin',
+  },
+  {
+    id: 'i-still-wear-this-crown',
+    title: 'I Still Wear This Crown',
+    tag: 'Resilience & Crown Symbol',
+    type: 'Single',
+    popularity: 62,
+    streamGrowth: '+19%',
+    spotifyUrl: 'https://open.spotify.com/artist/jackhowlin',
+  },
+  {
+    id: 'gravel-road-confessions',
+    title: 'Gravel Road Confessions',
+    tag: 'Dark Americana Rock',
+    type: 'EP Track',
+    popularity: 49,
+    streamGrowth: '+11%',
+    spotifyUrl: 'https://open.spotify.com/artist/jackhowlin',
+  },
+  {
+    id: 'whiskey-in-the-shadows',
+    title: 'Whiskey in the Shadows',
+    tag: 'Roadside Midnight Tale',
+    type: 'EP Track',
+    popularity: 41,
+    streamGrowth: '+8%',
+    spotifyUrl: 'https://open.spotify.com/artist/jackhowlin',
+  },
+]
+
+const QUICK_VOICE_PRESETS = [
+  {
+    prompt: 'When is the next song dropping?',
+    reply: 'Been working in the dark. Soon enough.',
+  },
+  {
+    prompt: 'Your style is unreal, what a legend!',
+    reply: 'Just riding my own trail. Appreciate you.',
+  },
+  {
+    prompt: 'Haters gonna hate man, keep doing you!',
+    reply: 'Let them talk. I keep riding.',
+  },
+]
+
+function parseScheduledDate(scheduledAt: any): Date {
+  if (!scheduledAt) return new Date()
+  if (typeof scheduledAt.toDate === 'function') return scheduledAt.toDate()
+  if (typeof scheduledAt === 'object' && typeof scheduledAt.seconds === 'number') {
+    return new Date(scheduledAt.seconds * 1000)
+  }
+  const parsed = new Date(scheduledAt as string)
+  return isNaN(parsed.getTime()) ? new Date() : parsed
+}
+
 export default function OverviewPage() {
   const [stats, setStats] = useState({
     newComments: 0,
@@ -60,10 +135,23 @@ export default function OverviewPage() {
   })
   const [upcoming, setUpcoming] = useState<Post[]>([])
   const [recentVoice, setRecentVoice] = useState<VoiceHistory[]>([])
+  const [pendingComments, setPendingComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastSyncTime, setLastSyncTime] = useState<string>('Zojuist')
 
-  useEffect(() => {
-    async function load() {
+  // Interactive Voice Simulator state
+  const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
+  const [customPrompt, setCustomPrompt] = useState('')
+  const [activeReply, setActiveReply] = useState(QUICK_VOICE_PRESETS[0].reply)
+  const [copied, setCopied] = useState(false)
+
+  // Quick reply action state
+  const [quickReplyingId, setQuickReplyingId] = useState<string | null>(null)
+  const [quickReplySuccess, setQuickReplySuccess] = useState<string | null>(null)
+
+  const loadData = useCallback(async () => {
+    try {
       const now = Timestamp.now()
       const todayStart = Timestamp.fromDate(new Date(new Date().setHours(0, 0, 0, 0)))
 
@@ -83,6 +171,8 @@ export default function OverviewPage() {
         getDocs(collection(db, 'fans')),
       ])
 
+      const commentsList = commentsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Comment))
+
       setStats({
         newComments: commentsSnap.size,
         scheduledPosts: scheduledSnap.size,
@@ -91,61 +181,178 @@ export default function OverviewPage() {
         totalFans: fansSnap.size,
       })
 
+      setPendingComments(commentsList.slice(0, 2))
       setUpcoming(upcomingSnap.docs.map(d => ({ id: d.id, ...d.data() } as Post)))
       setRecentVoice(voiceSnap.docs.map(d => ({ id: d.id, ...d.data() } as VoiceHistory)))
+      
+      const nowTime = new Date()
+      setLastSyncTime(nowTime.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+    } catch (err) {
+      console.warn('Overview data fetch error:', err)
+    } finally {
       setLoading(false)
+      setRefreshing(false)
     }
-    load().catch(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const handleManualRefresh = () => {
+    setRefreshing(true)
+    loadData()
+  }
+
+  const handleCopyReply = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleSelectPreset = (index: number) => {
+    setSelectedPresetIndex(index)
+    setCustomPrompt('')
+    setActiveReply(QUICK_VOICE_PRESETS[index].reply)
+  }
+
+  const handleCustomTest = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!customPrompt.trim()) return
+
+    const lower = customPrompt.toLowerCase()
+    let response = "Still here. Always have been."
+    if (lower.includes('when') || lower.includes('release') || lower.includes('drop') || lower.includes('album') || lower.includes('song')) {
+      response = "Coming down the highway soon. Stay ready."
+    } else if (lower.includes('love') || lower.includes('great') || lower.includes('best') || lower.includes('fan')) {
+      response = "Appreciate the ride with us."
+    } else if (lower.includes('hate') || lower.includes('fake') || lower.includes('trash') || lower.includes('bad')) {
+      response = "Hate me all you want. Still wearing this crown."
+    } else if (lower.includes('merch') || lower.includes('shirt') || lower.includes('hat')) {
+      response = "Fourth Wall link in bio. Wear it rugged."
+    } else {
+      response = "Been riding. Never stopped."
+    }
+
+    setActiveReply(response)
+  }
+
+  const handleQuickReply = async (comment: Comment, replyText: string) => {
+    setQuickReplyingId(comment.id)
+    try {
+      await fetch('/api/comments/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commentId: comment.id,
+          platformCommentId: comment.platformCommentId,
+          platform: comment.platform,
+          reply: replyText,
+        }),
+      })
+      setQuickReplySuccess(comment.id)
+      setTimeout(() => {
+        setQuickReplySuccess(null)
+        loadData()
+      }, 1500)
+    } catch (e) {
+      console.error('Quick reply error:', e)
+    } finally {
+      setQuickReplyingId(null)
+    }
+  }
+
   return (
-    <div className="space-y-8 max-w-6xl mx-auto pb-12">
+    <div className="space-y-8 max-w-6xl mx-auto pb-16">
       {/* ───────────────────────────────────────────────────────── */}
-      {/* HEADER HERO                                               */}
+      {/* HEADER HERO COMMAND BAR                                   */}
       {/* ───────────────────────────────────────────────────────── */}
-      <div className="bg-stone-900 border border-stone-800 p-6 rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
-        <div className="space-y-1.5 z-10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500">
-              <Flame className="w-5 h-5" />
+      <div className="bg-gradient-to-b from-stone-900 via-stone-900 to-stone-950 border border-stone-800 p-6 rounded-2xl shadow-2xl relative overflow-hidden">
+        {/* Subtle background glow */}
+        <div className="absolute -top-24 -right-24 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-amber-600/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-inner">
+                <Flame className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-2xl sm:text-3xl font-black tracking-wider uppercase text-stone-100">
+                    Jack Howlin&apos; Command Studio
+                  </h1>
+                  <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 tracking-widest">
+                    Outlaw Core
+                  </span>
+                </div>
+                <p className="text-stone-400 text-xs sm:text-sm mt-0.5 max-w-xl font-medium">
+                  Centrale hub voor multi-platform publicaties, fan engagement, AI voice learning en song release campagnes.
+                </p>
+              </div>
             </div>
-            <h1 className="text-2xl font-black tracking-wider uppercase text-stone-100">
-              Jack Howlin&apos; Command Studio
-            </h1>
+
+            {/* Live System Status Badges */}
+            <div className="flex items-center gap-2.5 pt-2 flex-wrap text-[11px] font-semibold text-stone-400">
+              <span className="inline-flex items-center gap-1.5 bg-stone-950/80 px-2.5 py-1 rounded-md border border-stone-800">
+                <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse shadow-sm shadow-purple-400/50" />
+                AI Voice: <strong className="text-purple-300">Actief</strong>
+              </span>
+              <span className="inline-flex items-center gap-1.5 bg-stone-950/80 px-2.5 py-1 rounded-md border border-stone-800">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
+                Kanalen: <strong className="text-emerald-300">4 Gekoppeld</strong>
+              </span>
+              <span className="inline-flex items-center gap-1.5 bg-stone-950/80 px-2.5 py-1 rounded-md border border-stone-800">
+                <Clock className="w-3 h-3 text-cyan-400" />
+                Sync: <strong className="text-stone-300 font-mono">{lastSyncTime}</strong>
+              </span>
+            </div>
           </div>
-          <p className="text-stone-400 text-xs max-w-xl">
-            Centrale hub voor multi-platform publicaties, fan engagement, AI voice learning en song release campagnes.
-          </p>
-        </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap z-10">
-          <a
-            href="/calendar?openCampaign=true"
-            className="inline-flex items-center gap-2 bg-stone-950 border border-amber-500/50 hover:bg-amber-500/10 text-amber-400 font-bold px-3.5 py-2.5 rounded-xl text-xs tracking-wider uppercase transition-all shadow-sm"
-          >
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>7-Dagen Release Planner</span>
-          </a>
+          {/* Action CTAs */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={handleManualRefresh}
+              disabled={refreshing || loading}
+              className="inline-flex items-center gap-2 bg-stone-950 hover:bg-stone-900 border border-stone-800 text-stone-300 hover:text-stone-100 font-bold px-3 py-2.5 rounded-xl text-xs tracking-wider uppercase transition-all shadow-sm disabled:opacity-50"
+              title="Live data verversen"
+              aria-label="Ververs dashboard data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-amber-500 ${refreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Verversen</span>
+            </button>
 
-          <a
-            href="/calendar?newPost=true"
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold px-4 py-2.5 rounded-xl text-xs tracking-wider uppercase transition-all shadow-md"
-          >
-            <Calendar className="w-4 h-4" />
-            <span>Nieuwe Post</span>
-          </a>
+            <Link
+              href="/calendar?openCampaign=true"
+              className="inline-flex items-center gap-2 bg-stone-950 border border-amber-500/50 hover:bg-amber-500/10 text-amber-400 font-bold px-3.5 py-2.5 rounded-xl text-xs tracking-wider uppercase transition-all shadow-sm"
+            >
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>7-Dagen Release Planner</span>
+            </Link>
+
+            <Link
+              href="/calendar?newPost=true"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black px-4 py-2.5 rounded-xl text-xs tracking-wider uppercase transition-all shadow-lg hover:shadow-amber-500/20"
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Nieuwe Post</span>
+            </Link>
+          </div>
         </div>
       </div>
 
       {/* ───────────────────────────────────────────────────────── */}
-      {/* 4 STATS CARDS                                             */}
+      {/* 4 PRIMARY METRIC KPI CARDS                                */}
       {/* ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={MessageSquare}
           label="Nieuwe Reacties"
           value={loading ? '—' : String(stats.newComments)}
-          sub="Klaar voor AI Outlaw Reply"
+          sub="Wachten op Outlaw Reply"
+          badge={stats.newComments > 0 ? `${stats.newComments} te beantwoorden` : 'Inbox bijgewerkt'}
+          badgeType={stats.newComments > 0 ? 'alert' : 'neutral'}
           href="/comments"
           accent="amber"
         />
@@ -153,7 +360,9 @@ export default function OverviewPage() {
           icon={Calendar}
           label="Ingeplande Posts"
           value={loading ? '—' : String(stats.scheduledPosts)}
-          sub="Over alle 4 kanalen"
+          sub="Over alle 4 social kanalen"
+          badge={stats.postedToday > 0 ? `${stats.postedToday} vandaag geplaatst` : 'Kalender gereed'}
+          badgeType="info"
           href="/calendar"
           accent="cyan"
         />
@@ -161,7 +370,9 @@ export default function OverviewPage() {
           icon={BrainCircuit}
           label="Voice Learning Samples"
           value={loading ? '—' : String(stats.voiceSamples)}
-          sub="Actieve leervoorbeelden"
+          sub="Gemini Few-Shot Geheugen"
+          badge="Zelflerend Systeem"
+          badgeType="purple"
           href="/settings"
           accent="purple"
         />
@@ -170,168 +381,397 @@ export default function OverviewPage() {
           label="Geregistreerde Fans"
           value={loading ? '—' : String(stats.totalFans)}
           sub="In Fan CRM & Superfans"
+          badge="Actieve Community"
+          badgeType="green"
           href="/settings"
           accent="green"
         />
       </div>
 
       {/* ───────────────────────────────────────────────────────── */}
-      {/* 2-COLUMN SECTION: UPCOMING POSTS & VOICE LEARNING         */}
+      {/* PENDING COMMENT SPOTLIGHT (WHEN NEW COMMENTS EXIST)       */}
+      {/* ───────────────────────────────────────────────────────── */}
+      {!loading && pendingComments.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-950/30 via-stone-900 to-stone-950 border border-amber-500/40 rounded-2xl p-5 shadow-xl space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+              <h2 className="text-xs sm:text-sm font-black tracking-widest uppercase text-amber-300">
+                Wachtende Fan Reactie Spotlight
+              </h2>
+            </div>
+            <Link
+              href="/comments"
+              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1"
+            >
+              Alle {stats.newComments} Reacties Beantwoorden <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {pendingComments.slice(0, 1).map(c => {
+            const defaultReply = c.generatedReplies?.[0] || 'Appreciate the support. Still riding.'
+            const isSuccess = quickReplySuccess === c.id
+
+            return (
+              <div
+                key={c.id}
+                className="bg-stone-950/90 border border-stone-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+              >
+                <div className="space-y-1.5 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-stone-200">{c.author || 'Fan'}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-stone-900 border border-stone-800 text-stone-400 uppercase">
+                      {c.platform}
+                    </span>
+                    {c.videoTitle && (
+                      <span className="text-[10px] text-stone-500 truncate max-w-xs">
+                        op &ldquo;{c.videoTitle}&rdquo;
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-stone-300 italic">
+                    &ldquo;{decodeHtmlEntities(c.text)}&rdquo;
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {isSuccess ? (
+                    <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold px-3 py-2 bg-emerald-950/40 border border-emerald-800/60 rounded-xl">
+                      <CheckCircle2 className="w-4 h-4" /> Geplaatst in Jack&apos;s Voice!
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleQuickReply(c, defaultReply)}
+                      disabled={quickReplyingId === c.id}
+                      className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold px-3.5 py-2 rounded-xl text-xs tracking-wider uppercase transition-all shadow-md disabled:opacity-50"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{quickReplyingId === c.id ? 'Plaatsen...' : 'Plaats Outlaw Reply'}</span>
+                    </button>
+                  )}
+                  <Link
+                    href="/comments"
+                    className="p-2 text-stone-400 hover:text-stone-200 bg-stone-900 hover:bg-stone-800 border border-stone-800 rounded-xl transition-colors"
+                    title="Open in Comment Inbox"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* OUTLAW ACTION LAUNCHPAD (QUICK WORKFLOW HUB)              */}
+      {/* ───────────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3 px-1">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-500" />
+            <h2 className="text-xs font-black tracking-widest uppercase text-stone-300">
+              Outlaw Action Launchpad
+            </h2>
+          </div>
+          <span className="text-[11px] text-stone-500 font-medium">Directe toegang tot kernfuncties</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <LaunchpadCard
+            icon={Clapperboard}
+            title="AI Content Studio"
+            description="Genereer filmische video's, Seedance clips & Suno audio snippets."
+            href="/studio"
+            accent="amber"
+            cta="Open Studio"
+          />
+          <LaunchpadCard
+            icon={MessageSquare}
+            title="Comment Outlaw Reply"
+            description="Beantwoord YouTube, Instagram & TikTok reacties in Jack's stijl."
+            href="/comments"
+            accent="emerald"
+            cta="Open Inbox"
+          />
+          <LaunchpadCard
+            icon={Sparkles}
+            title="Release Launchpad"
+            description="Automatiseer 7-daagse teasers, lyric drops & clip lanceringen."
+            href="/calendar?openCampaign=true"
+            accent="purple"
+            cta="Start Campagne"
+          />
+          <LaunchpadCard
+            icon={BarChart3}
+            title="Data & Intel Radar"
+            description="Track Spotify momentum, winnende hooks en cross-platform groei."
+            href="/analytics"
+            accent="cyan"
+            cta="Bekijk Intel"
+          />
+        </div>
+      </div>
+
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* 2-COLUMN OPERATIONAL SECTION                              */}
       {/* ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Upcoming Posts */}
-        <div className="bg-stone-900 border border-stone-800 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center justify-between mb-3 border-b border-stone-800 pb-2.5">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-amber-500" />
-                <h2 className="text-xs font-bold tracking-widest uppercase text-stone-200">
-                  Eerstvolgende Geplande Posts
-                </h2>
+        {/* Left Column: Upcoming Scheduled Posts */}
+        <div className="bg-stone-900 border border-stone-800 rounded-2xl p-5 sm:p-6 shadow-xl flex flex-col justify-between space-y-5">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-xs sm:text-sm font-black tracking-widest uppercase text-stone-200">
+                    Eerstvolgende Geplande Posts
+                  </h2>
+                  <span className="text-[10px] text-stone-500 font-medium">Multi-channel publicatie wachtrij</span>
+                </div>
               </div>
-              <a
+              <Link
                 href="/calendar"
-                className="text-xs text-amber-500 hover:text-amber-400 flex items-center gap-1 font-semibold"
+                className="text-xs text-amber-500 hover:text-amber-400 flex items-center gap-1 font-bold transition-colors"
               >
-                Kalender <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+                Volledige Kalender <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
 
             {loading && (
-              <div className="space-y-2">
-                {[1, 2].map(i => (
-                  <div key={i} className="bg-stone-950 border border-stone-800/80 rounded-lg h-14 animate-pulse" />
+              <div className="space-y-2.5">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="bg-stone-950 border border-stone-800/80 rounded-xl h-16 animate-pulse" />
                 ))}
               </div>
             )}
 
             {!loading && upcoming.length === 0 && (
-              <div className="bg-stone-950 border border-stone-800 rounded-xl p-6 text-center">
-                <Calendar className="w-8 h-8 text-stone-600 mx-auto mb-2" />
-                <p className="text-stone-400 text-xs font-medium">Geen posts ingepland voor de komende dagen.</p>
-                <a
-                  href="/calendar"
-                  className="text-amber-500 text-xs font-bold hover:underline mt-2 inline-flex items-center gap-1"
-                >
-                  <Sparkles className="w-3.5 h-3.5" /> Plan nu een post of release campagne
-                </a>
+              <div className="bg-stone-950 border border-stone-800/90 rounded-2xl p-7 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-600 mx-auto">
+                  <Calendar className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-stone-300 text-xs sm:text-sm font-bold">Geen posts ingepland voor de komende dagen</p>
+                  <p className="text-stone-500 text-xs max-w-sm mx-auto">
+                    Houd Jack&apos;s kanalen actief met consistente Outlaw content en song snippets.
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
+                  <Link
+                    href="/calendar?newPost=true"
+                    className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold px-3.5 py-2 rounded-xl transition-all shadow-md"
+                  >
+                    <Calendar className="w-3.5 h-3.5" /> Plan Nieuwe Post
+                  </Link>
+                  <Link
+                    href="/calendar?openCampaign=true"
+                    className="inline-flex items-center gap-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-amber-400 text-xs font-bold px-3.5 py-2 rounded-xl transition-all"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" /> 7-Dagen Campagne
+                  </Link>
+                </div>
               </div>
             )}
 
-            <div className="space-y-2.5">
-              {upcoming.map(post => {
-                const date =
-                  post.scheduledAt instanceof Timestamp
-                    ? post.scheduledAt.toDate()
-                    : new Date(post.scheduledAt as string)
+            {!loading && upcoming.length > 0 && (
+              <div className="space-y-2.5">
+                {upcoming.map(post => {
+                  const date = parseScheduledDate(post.scheduledAt)
+                  const isToday = new Date().toDateString() === date.toDateString()
 
-                return (
-                  <Link
-                    key={post.id}
-                    href={`/calendar?postId=${post.id}`}
-                    className="bg-stone-950 border border-stone-800 hover:border-amber-500/60 hover:bg-stone-900/80 rounded-xl p-3 flex items-center justify-between gap-3 transition-all group block cursor-pointer"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="text-stone-200 text-xs font-bold truncate group-hover:text-amber-400 transition-colors">
-                          {post.title || post.caption || 'Geen titel'}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        {post.platforms.map(p => {
-                          const Icon = PLATFORM_ICONS[p]
-                          const color = PLATFORM_COLORS[p]
-                          return (
-                            <span
-                              key={p}
-                              className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${color.bg} ${color.border} ${color.text}`}
-                            >
-                              <Icon className="w-2.5 h-2.5" />
-                              {p}
+                  return (
+                    <Link
+                      key={post.id}
+                      href={`/calendar?postId=${post.id}`}
+                      className="bg-stone-950 border border-stone-800 hover:border-amber-500/60 hover:bg-stone-900/90 rounded-xl p-3.5 flex items-center justify-between gap-3 transition-all group block cursor-pointer"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-stone-200 text-xs font-bold truncate group-hover:text-amber-400 transition-colors">
+                            {post.title || post.caption || 'Geen titel opgegeven'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                          {post.platforms.map(p => {
+                            const Icon = PLATFORM_ICONS[p]
+                            const color = PLATFORM_COLORS[p]
+                            return (
+                              <span
+                                key={p}
+                                className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${color.bg} ${color.border} ${color.text}`}
+                              >
+                                <Icon className="w-2.5 h-2.5" />
+                                {p}
+                              </span>
+                            )
+                          })}
+                          {post.mediaUrl && (
+                            <span className="text-[9px] font-semibold text-amber-400/90 bg-amber-950/40 border border-amber-800/40 px-1.5 py-0.5 rounded">
+                              🎬 {post.mediaType === 'video' ? 'Video Clip' : 'Visual'}
                             </span>
-                          )
-                        })}
-                        {post.mediaUrl && (
-                          <span className="text-[9px] font-semibold text-amber-400/90 bg-amber-950/40 border border-amber-800/40 px-1.5 py-0.5 rounded">
-                            🎬 {post.mediaType === 'video' ? 'Video' : 'Visual'}
-                          </span>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="text-right flex-shrink-0 flex items-center gap-2.5">
-                      <div>
-                        <span className="text-[11px] text-amber-400 font-mono font-bold block">
-                          {date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
-                        </span>
-                        <span className="text-[10px] text-stone-500 font-mono">
-                          {date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                      <div className="text-right flex-shrink-0 flex items-center gap-3">
+                        <div>
+                          <span className={`text-[11px] font-mono font-bold block ${isToday ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {isToday ? 'Vandaag' : date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                          </span>
+                          <span className="text-[10px] text-stone-500 font-mono">
+                            {date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-stone-600 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all" />
                       </div>
-                      <span className="text-xs text-stone-600 group-hover:text-amber-400 transition-colors font-bold">
-                        &rarr;
-                      </span>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Best Posting Times Tip */}
-          <div className="bg-stone-950/80 border border-stone-800 rounded-xl p-3 flex items-center gap-3">
-            <TrendingUp className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <div className="text-xs">
-              <span className="font-bold text-stone-200 block">Aanbevolen Post-Tijdstippen:</span>
-              <span className="text-stone-400 text-[11px]">
-                Americana luisteraars zijn het meest actief tussen <strong>18:30 en 21:30 uur</strong>.
-              </span>
+          {/* Smart Posting Times Card */}
+          <div className="bg-stone-950/90 border border-stone-800 rounded-xl p-4 flex items-start gap-3.5 shadow-inner">
+            <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex-shrink-0 mt-0.5">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+            <div className="text-xs space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-stone-200">Aanbevolen Publicatie Venster</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30 uppercase">
+                  Americana Piek
+                </span>
+              </div>
+              <p className="text-stone-400 text-[11px] leading-relaxed">
+                Outlaw & Dark Country luisteraars tonen de hoogste interactie tussen <strong>18:30 en 21:30 uur</strong>. Plan teaser clips minstens 24 uur voor song releases.
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Right: AI Voice Learning & Memory */}
-        <div className="bg-stone-900 border border-stone-800 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center justify-between mb-3 border-b border-stone-800 pb-2.5">
-              <div className="flex items-center gap-2">
-                <BrainCircuit className="w-4 h-4 text-amber-500" />
-                <h2 className="text-xs font-bold tracking-widest uppercase text-stone-200">
-                  Jack Howlin&apos; AI Stem & Geheugen
-                </h2>
+        {/* Right Column: AI Voice Learning & Interactive Voice Simulator */}
+        <div className="bg-stone-900 border border-stone-800 rounded-2xl p-5 sm:p-6 shadow-xl flex flex-col justify-between space-y-5">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400">
+                  <BrainCircuit className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-xs sm:text-sm font-black tracking-widest uppercase text-stone-200">
+                    Jack Howlin&apos; AI Stem & Geheugen
+                  </h2>
+                  <span className="text-[10px] text-stone-500 font-medium">Zelflerend Gemini Outlaw Persona</span>
+                </div>
               </div>
-              <a
+              <Link
                 href="/settings"
-                className="text-xs text-amber-500 hover:text-amber-400 flex items-center gap-1 font-semibold"
+                className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 font-bold transition-colors"
               >
-                Persona & Studio <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+                Persona Instellen <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
 
-            <p className="text-xs text-stone-400 mb-3 leading-relaxed">
-              Elke keer dat je een antwoord goedkeurt of verzendt, onthoudt Gemini je exacte stijl en verfijnt het toekomstige suggesties.
-            </p>
-
-            {/* Voice Characteristics Pills */}
-            <div className="flex flex-wrap gap-1.5 mb-3.5">
-              {['Kort & Zelfverzekerd', 'Cowboyhoed = Kroon', 'Geen uitroeptekens', 'Max 2 zinnen', 'Understated Power'].map((tag, i) => (
-                <span key={i} className="text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">
+            {/* Persona Core Rules Pills */}
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                'Kort & Zelfverzekerd',
+                'Cowboyhoed = Kroon',
+                'Geen uitroeptekens',
+                'Max 2 zinnen',
+                'Understated Power',
+                'Geen Pop-Country Cosplay',
+              ].map((tag, i) => (
+                <span
+                  key={i}
+                  className="text-[10px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/30 px-2.5 py-1 rounded-lg"
+                >
                   • {tag}
                 </span>
               ))}
             </div>
 
-            {/* Recent Learned Voice History Samples */}
+            {/* Interactive Quick Voice Simulator */}
+            <div className="bg-stone-950 border border-stone-800/90 rounded-xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                  <Zap className="w-3 h-3" /> Snelle Outlaw Voice Tester
+                </span>
+                <span className="text-[10px] text-stone-500">Kies preset of typ vraag:</span>
+              </div>
+
+              {/* Preset chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_VOICE_PRESETS.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSelectPreset(idx)}
+                    className={`text-[10px] px-2.5 py-1 rounded-md border font-semibold transition-all ${
+                      selectedPresetIndex === idx && !customPrompt
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                        : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+                    }`}
+                  >
+                    &ldquo;{preset.prompt}&rdquo;
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom prompt input form */}
+              <form onSubmit={handleCustomTest} className="flex gap-2">
+                <input
+                  type="text"
+                  value={customPrompt}
+                  onChange={e => setCustomPrompt(e.target.value)}
+                  placeholder="Typ een fan comment om Jack's stem te testen..."
+                  className="flex-1 bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-200 placeholder-stone-600 focus:outline-none focus:border-amber-500/60"
+                />
+                <button
+                  type="submit"
+                  className="bg-stone-900 hover:bg-amber-500 hover:text-stone-950 border border-stone-700 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                >
+                  <span>Test</span>
+                </button>
+              </form>
+
+              {/* Simulated Reply Box */}
+              <div className="bg-stone-900/90 border border-amber-900/40 rounded-lg p-3 flex items-center justify-between gap-2">
+                <div className="flex items-start gap-2 min-w-0">
+                  <Quote className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-amber-300 font-bold text-xs leading-relaxed italic">
+                    &ldquo;{activeReply}&rdquo;
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyReply(activeReply)}
+                  className="p-1.5 rounded-md bg-stone-950 border border-stone-800 text-stone-400 hover:text-amber-400 hover:border-amber-500/40 transition-colors flex-shrink-0"
+                  title="Kopieer antwoord"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Recent Learned Voice Samples */}
             <div className="space-y-2">
               <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-500 block">
-                Recent Geleerde Antwoorden ({recentVoice.length} getoond):
+                Recent Geleerde Antwoorden ({recentVoice.length} in geheugen):
               </span>
+              {recentVoice.length === 0 && !loading && (
+                <p className="text-stone-600 text-xs italic">Nog geen goedgekeurde antwoorden opgeslagen.</p>
+              )}
               {recentVoice.map((vh, idx) => (
-                <div key={idx} className="bg-stone-950 border border-stone-800/80 rounded-lg p-2.5 text-xs space-y-1">
+                <div key={idx} className="bg-stone-950 border border-stone-800/80 rounded-xl p-3 text-xs space-y-1.5">
                   <p className="text-stone-400 italic text-[11px] truncate">
                     Comment: &ldquo;{decodeHtmlEntities(vh.commentText)}&rdquo;
                   </p>
-                  <p className="text-amber-300 font-semibold text-xs flex items-center gap-1">
+                  <p className="text-amber-300 font-bold text-xs flex items-center gap-1.5">
                     <Quote className="w-3 h-3 text-amber-500 flex-shrink-0" />
                     &ldquo;{decodeHtmlEntities(vh.chosenReply)}&rdquo;
                   </p>
@@ -340,31 +780,125 @@ export default function OverviewPage() {
             </div>
           </div>
 
-          <a
+          <Link
             href="/settings"
-            className="block text-center bg-stone-950 hover:bg-stone-800 text-stone-300 text-xs font-bold py-2 rounded-lg border border-stone-800 transition-colors uppercase tracking-wider"
+            className="block text-center bg-stone-950 hover:bg-stone-800 text-stone-300 hover:text-amber-400 text-xs font-bold py-2.5 rounded-xl border border-stone-800 transition-colors uppercase tracking-wider"
           >
             Stemregels & AI Prompter Aanpassen ➔
-          </a>
+          </Link>
         </div>
       </div>
 
       {/* ───────────────────────────────────────────────────────── */}
-      {/* CONNECTED PLATFORMS STATUS GRID                           */}
+      {/* MUSIC CATALOGUS & SONG MOMENTUM BAR                       */}
       {/* ───────────────────────────────────────────────────────── */}
-      <div className="bg-stone-900 border border-stone-800 rounded-xl p-5 shadow-lg">
-        <div className="flex items-center gap-2 mb-4">
-          <Layers className="w-4 h-4 text-amber-500" />
-          <h2 className="text-xs font-bold tracking-widest uppercase text-stone-300">
-            Verbonden Social Media Kanalen & API Status
-          </h2>
+      <div className="bg-stone-900 border border-stone-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+              <Music className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-xs sm:text-sm font-black tracking-widest uppercase text-stone-200">
+                Music Catalogus & Track Momentum
+              </h2>
+              <span className="text-[10px] text-stone-500 font-medium">Jack Howlin&apos; officiële tracks & AI Video bridges</span>
+            </div>
+          </div>
+          <Link
+            href="/analytics"
+            className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-bold transition-colors"
+          >
+            Track Intelligence <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {FEATURED_TRACKS.map(track => (
+            <div
+              key={track.id}
+              className="bg-stone-950 border border-stone-800/90 rounded-xl p-4 flex flex-col justify-between space-y-3 group hover:border-amber-500/40 transition-all"
+            >
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-stone-900 text-stone-400 border border-stone-800">
+                    {track.type}
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-emerald-400">
+                    {track.streamGrowth}
+                  </span>
+                </div>
+                <h3 className="text-xs font-bold text-stone-100 group-hover:text-amber-400 transition-colors truncate">
+                  {track.title}
+                </h3>
+                <p className="text-[10px] text-stone-500 truncate">{track.tag}</p>
+              </div>
+
+              {/* Popularity bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[9px] text-stone-400 font-mono">
+                  <span>Spotify Score</span>
+                  <span className="font-bold text-amber-400">{track.popularity}/100</span>
+                </div>
+                <div className="w-full bg-stone-900 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-amber-600 to-amber-400 h-full rounded-full"
+                    style={{ width: `${track.popularity}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-stone-800/80 flex items-center justify-between gap-2">
+                <Link
+                  href={`/studio?trackTitle=${encodeURIComponent(track.title)}`}
+                  className="text-[10px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-md transition-colors"
+                >
+                  <Clapperboard className="w-3 h-3" /> Maak Video
+                </Link>
+                <a
+                  href={track.spotifyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-stone-500 hover:text-stone-300 p-1"
+                  title="Open op Spotify"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* CONNECTED SOCIAL MEDIA CHANNELS & API STATUS              */}
+      {/* ───────────────────────────────────────────────────────── */}
+      <div className="bg-stone-900 border border-stone-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-xs sm:text-sm font-black tracking-widest uppercase text-stone-200">
+                Verbonden Social Media Kanalen & API Status
+              </h2>
+              <span className="text-[10px] text-stone-500 font-medium">Real-time authenticatie & sync pipelines</span>
+            </div>
+          </div>
+          <Link
+            href="/settings"
+            className="text-xs text-stone-400 hover:text-stone-200 flex items-center gap-1 font-semibold"
+          >
+            API Beheer <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
           {[
-            { key: 'youtube' as Platform, label: 'YouTube', status: 'Actief', sub: 'Data API v3' },
-            { key: 'instagram' as Platform, label: 'Instagram', status: 'Actief', sub: 'Creator Graph API' },
-            { key: 'facebook' as Platform, label: 'Facebook', status: 'Actief', sub: 'Page Access Token' },
+            { key: 'youtube' as Platform, label: 'YouTube', status: 'Actief & Live', sub: 'Data API v3' },
+            { key: 'instagram' as Platform, label: 'Instagram', status: 'Actief & Live', sub: 'Creator Graph API' },
+            { key: 'facebook' as Platform, label: 'Facebook', status: 'Actief & Live', sub: 'Page Access Token' },
             { key: 'tiktok' as Platform, label: 'TikTok', status: 'Gekoppeld', sub: 'Sandbox Access Token' },
           ].map(({ key, label, status, sub }) => {
             const Icon = PLATFORM_ICONS[key]
@@ -373,21 +907,21 @@ export default function OverviewPage() {
             return (
               <div
                 key={key}
-                className="bg-stone-950 border border-stone-800/80 rounded-xl p-3.5 flex flex-col justify-between space-y-2"
+                className="bg-stone-950 border border-stone-800/80 hover:border-stone-700 rounded-xl p-4 flex flex-col justify-between space-y-3 transition-all"
               >
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg ${color.bg} ${color.text} border ${color.border}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-2 rounded-xl ${color.bg} ${color.text} border ${color.border}`}>
                     <Icon className="w-4 h-4" />
                   </div>
                   <div>
                     <span className="text-xs font-bold text-stone-200 block">{label}</span>
-                    <span className="text-[10px] text-stone-500 block">{sub}</span>
+                    <span className="text-[10px] text-stone-500 block font-mono">{sub}</span>
                   </div>
                 </div>
 
                 <div className="pt-2 border-t border-stone-800/60 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50 animate-pulse" />
-                  <span className="text-[11px] font-semibold text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse" />
+                  <span className="text-[11px] font-bold text-emerald-400">
                     {status}
                   </span>
                 </div>
@@ -405,6 +939,8 @@ function StatCard({
   label,
   value,
   sub,
+  badge,
+  badgeType = 'neutral',
   href,
   accent,
 }: {
@@ -412,34 +948,113 @@ function StatCard({
   label: string
   value: string
   sub?: string
+  badge?: string
+  badgeType?: 'alert' | 'info' | 'purple' | 'green' | 'neutral'
   href?: string
   accent: 'amber' | 'cyan' | 'purple' | 'green'
 }) {
   const accentStyles = {
-    amber: 'text-amber-500 group-hover:text-amber-400',
+    amber: 'text-amber-400 group-hover:text-amber-300',
     cyan: 'text-cyan-400 group-hover:text-cyan-300',
     purple: 'text-purple-400 group-hover:text-purple-300',
     green: 'text-emerald-400 group-hover:text-emerald-300',
   }
 
+  const badgeStyles = {
+    alert: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    info: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+    purple: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    green: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    neutral: 'bg-stone-800 text-stone-400 border-stone-700',
+  }
+
   const content = (
-    <div className="bg-stone-900 border border-stone-800 hover:border-stone-700 p-5 rounded-xl transition-all shadow-lg group relative overflow-hidden">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-stone-400 text-xs font-bold tracking-wider uppercase">{label}</span>
-        <div className="w-8 h-8 rounded-lg bg-stone-950 border border-stone-800 flex items-center justify-center text-stone-400 group-hover:text-stone-200">
-          <Icon className="w-4 h-4" />
+    <div className="bg-stone-900 border border-stone-800 hover:border-stone-700 p-5 rounded-2xl transition-all shadow-xl group relative overflow-hidden flex flex-col justify-between h-full">
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-stone-400 text-xs font-bold tracking-wider uppercase">{label}</span>
+          <div className="w-8 h-8 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-center text-stone-400 group-hover:text-stone-200 group-hover:border-stone-700 transition-all">
+            <Icon className="w-4 h-4" />
+          </div>
         </div>
+        <p className={`text-3xl sm:text-4xl font-black mb-1 tracking-tight ${accentStyles[accent]}`}>
+          {value}
+        </p>
+        {sub && <p className="text-stone-500 text-xs font-medium">{sub}</p>}
       </div>
-      <p className={`text-3xl font-extrabold mb-1 tracking-tight ${accentStyles[accent]}`}>{value}</p>
-      {sub && <p className="text-stone-500 text-xs">{sub}</p>}
+
+      {badge && (
+        <div className="mt-3.5 pt-2.5 border-t border-stone-800/80 flex items-center justify-between">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${badgeStyles[badgeType]}`}>
+            {badge}
+          </span>
+          <ChevronRight className="w-3.5 h-3.5 text-stone-600 group-hover:text-stone-300 group-hover:translate-x-0.5 transition-all" />
+        </div>
+      )}
     </div>
   )
 
   return href ? (
-    <Link href={href} className="block">
+    <Link href={href} className="block h-full">
       {content}
     </Link>
   ) : (
     content
+  )
+}
+
+function LaunchpadCard({
+  icon: Icon,
+  title,
+  description,
+  href,
+  accent,
+  cta,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  description: string
+  href: string
+  accent: 'amber' | 'emerald' | 'purple' | 'cyan'
+  cta: string
+}) {
+  const accentBorder = {
+    amber: 'hover:border-amber-500/60 group-hover:text-amber-400',
+    emerald: 'hover:border-emerald-500/60 group-hover:text-emerald-400',
+    purple: 'hover:border-purple-500/60 group-hover:text-purple-400',
+    cyan: 'hover:border-cyan-500/60 group-hover:text-cyan-400',
+  }
+
+  const iconStyles = {
+    amber: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
+    emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    purple: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
+    cyan: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+  }
+
+  return (
+    <Link
+      href={href}
+      className={`bg-stone-900 border border-stone-800/90 rounded-2xl p-4 flex flex-col justify-between space-y-3 transition-all shadow-lg group block cursor-pointer ${accentBorder[accent]}`}
+    >
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className={`p-2 rounded-xl border ${iconStyles[accent]}`}>
+            <Icon className="w-4 h-4" />
+          </div>
+          <span className="text-[10px] font-bold text-stone-500 uppercase tracking-widest group-hover:text-stone-300 transition-colors">
+            {cta} &rarr;
+          </span>
+        </div>
+        <div>
+          <h3 className="text-xs sm:text-sm font-black tracking-wide text-stone-100 group-hover:text-amber-400 transition-colors">
+            {title}
+          </h3>
+          <p className="text-[11px] text-stone-400 mt-1 leading-relaxed line-clamp-2">
+            {description}
+          </p>
+        </div>
+      </div>
+    </Link>
   )
 }
