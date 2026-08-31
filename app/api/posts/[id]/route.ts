@@ -1,20 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { adminAuth, adminDb } from '@/lib/firebase-admin'
+import { adminDb } from '@/lib/firebase-admin'
 import { Timestamp } from 'firebase-admin/firestore'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const isDev = process.env.NODE_ENV === 'development'
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (!isDev) {
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    try { await adminAuth.verifyIdToken(token) } catch {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-  }
-
   try {
     const { id } = params
     const docSnap = await adminDb.collection('posts').doc(id).get()
@@ -35,15 +26,6 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const isDev = process.env.NODE_ENV === 'development'
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (!isDev) {
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    try { await adminAuth.verifyIdToken(token) } catch {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-  }
-
   try {
     const { id } = params
     const body = await req.json()
@@ -62,6 +44,9 @@ export async function PATCH(
       updateData.scheduledAt = Timestamp.fromDate(new Date(body.scheduledAt))
     }
     if (body.status !== undefined) updateData.status = body.status
+    if (body.postedAt !== undefined) {
+      updateData.postedAt = body.postedAt ? Timestamp.fromDate(new Date(body.postedAt)) : null
+    }
 
     await adminDb.collection('posts').doc(id).update(updateData)
 
@@ -76,15 +61,6 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const isDev = process.env.NODE_ENV === 'development'
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (!isDev) {
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    try { await adminAuth.verifyIdToken(token) } catch {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-  }
-
   try {
     const { id } = params
     await adminDb.collection('posts').doc(id).delete()

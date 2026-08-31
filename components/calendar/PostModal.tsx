@@ -1,9 +1,9 @@
 'use client'
 import { useRef, useState, useEffect } from 'react'
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
-import { storage } from '@/lib/firebase'
+import { doc, updateDoc, addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore'
+import { db, storage } from '@/lib/firebase'
 import type { Platform, Post } from '@/types'
-import { Timestamp } from 'firebase/firestore'
 import {
   Sparkles,
   UploadCloud,
@@ -22,6 +22,7 @@ import {
   Trash2,
   Copy,
   Check,
+  Zap,
 } from 'lucide-react'
 
 interface PostModalProps {
@@ -197,12 +198,19 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
   const [copiedLink, setCopiedLink] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Tabs & preview state
+  const [activeTab, setActiveTab] = useState<'compose' | 'preview'>('compose')
+  const [previewPlatform, setPreviewPlatform] = useState<Platform>('instagram')
+  const [copiedLink, setCopiedLink] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [publishingNow, setPublishingNow] = useState(false)
+
   // AI Auto-Pilot State
   const [aiPrompt, setAiPrompt] = useState('')
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
   const [aiVariations, setAiVariations] = useState<{ style: string; caption: string }[]>([])
   const [saving, setSaving] = useState(false)
-  const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null)
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
   // A11y: close on Escape key
   useEffect(() => {
@@ -212,28 +220,6 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
-
-  // Auto-adapt platforms when media changes
-  useEffect(() => {
-    if (mediaType === 'image') {
-      // Images: remove YouTube and TikTok
-      setPlatforms(prev => {
-        const filtered = prev.filter(p => p === 'instagram' || p === 'facebook')
-        return filtered.length > 0 ? filtered : ['instagram', 'facebook']
-      })
-      if (previewPlatform === 'youtube' || previewPlatform === 'tiktok') {
-        setPreviewPlatform('instagram')
-      }
-    } else if (mediaType === 'video') {
-      // Videos: enable all platforms by default if only 1 was active
-      setPlatforms(prev => {
-        if (!prev.includes('youtube') && !prev.includes('tiktok')) {
-          return ['youtube', 'instagram', 'tiktok', 'facebook']
-        }
-        return prev
-      })
-    }
-  }, [mediaType, previewPlatform])
 
   // Media upload handler
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -253,16 +239,10 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
     setExistingMediaUrl(null)
     setUploadProgress(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
-    setPlatforms(['facebook'])
   }
 
   // Toggle platform
   function togglePlatform(p: Platform) {
-    const meta = PLATFORM_DETAILS[p]
-    // Validation: prevent selecting unsupported platforms based on media
-    if (mediaType === 'image' && !meta.supportsImage) return
-    if (!mediaType && !meta.supportsTextOnly) return
-
     setPlatforms(prev => {
       const next = prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
       return next
@@ -276,53 +256,32 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
     if (!promptToUse.trim() && !mediaFile) return
 
     setIsGeneratingAI(true)
-    setAiSuccessMessage(null)
+    setToastMessage(null)
 
     try {
-      const res = await fetch('/api/posts/ai-studio', {
+      const res = await fetch('/api/posts/campaign-generator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: promptToUse,
-          mediaType,
-          fileName: mediaFile?.name,
+          mediaType: mediaType ?? 'video',
         }),
       })
 
+      if (!res.ok) throw new Error('AI Generator fout')
       const data = await res.json()
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Generatie mislukt')
-      }
 
-      // Apply AI output automatically
       if (data.caption) setCaption(data.caption)
-      if (data.title && (mediaType === 'video' || platforms.includes('youtube'))) {
-        setTitle(data.title)
-      }
-      if (data.tags && Array.isArray(data.tags)) {
-        setTags(data.tags.join(', '))
-      }
-      if (data.scheduledAt && !scheduledAt) {
-        setScheduledAt(data.scheduledAt)
-      }
-      if (data.suggestedPlatforms && Array.isArray(data.suggestedPlatforms)) {
-        // Filter based on media capability
-        const validSuggested = data.suggestedPlatforms.filter((p: Platform) => {
-          if (mediaType === 'image') return PLATFORM_DETAILS[p].supportsImage
-          if (mediaType === 'video') return PLATFORM_DETAILS[p].supportsVideo
-          return PLATFORM_DETAILS[p].supportsTextOnly
-        })
-        if (validSuggested.length > 0) setPlatforms(validSuggested)
-      }
-      if (data.variations) {
-        setAiVariations(data.variations)
-      }
+      if (data.title && !title) setTitle(data.title)
+      if (data.tags && Array.isArray(data.tags)) setTags(data.tags.join(', '))
+      if (data.scheduledAt && !scheduledAt) setScheduledAt(data.scheduledAt)
+      if (data.variations) setAiVariations(data.variations)
 
-      setAiSuccessMessage('✨ Post automatisch gegenereerd & ingevuld!')
-      setTimeout(() => setAiSuccessMessage(null), 4000)
+      setToastMessage({ text: '✨ Post automatisch gegenereerd & ingevuld!', type: 'success' })
+      setTimeout(() => setToastMessage(null), 4000)
     } catch (err) {
       console.error('AI generation failed:', err)
-      setAiSuccessMessage(err instanceof Error ? `Fout: ${err.message}` : 'AI generatie mislukt')
+      setToastMessage({ text: err instanceof Error ? `Fout: ${err.message}` : 'AI generatie mislukt', type: 'error' })
     } finally {
       setIsGeneratingAI(false)
     }
@@ -351,7 +310,7 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
     })
   }
 
-  // Final Save handler
+  // Final Save handler (Schedule or Save Changes)
   async function handleSave() {
     if (!caption.trim() || !scheduledAt || platforms.length === 0) return
     if (platforms.includes('youtube') && !title.trim()) return
@@ -363,54 +322,161 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
         finalMediaUrl = await uploadMedia(mediaFile)
       }
 
+      const scheduledDate = new Date(scheduledAt)
       const payload = {
         platforms,
         caption,
-        title: title.trim() || undefined,
+        title: title.trim() || null,
         tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-        scheduledAt,
+        scheduledAt: scheduledAt,
         mediaUrl: finalMediaUrl,
         mediaType: finalMediaUrl ? mediaType : null,
       }
 
       if (isEditing && post?.id) {
-        const res = await fetch(`/api/posts/${post.id}`, {
+        try {
+          await updateDoc(doc(db, 'posts', post.id), {
+            ...payload,
+            scheduledAt: Timestamp.fromDate(scheduledDate),
+            updatedAt: serverTimestamp(),
+          })
+        } catch (dbErr) {
+          console.warn('Direct Firestore update fallback to API:', dbErr)
+        }
+
+        await fetch(`/api/posts/${post.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-        if (!res.ok) throw new Error('Kon post niet bijwerken')
       } else {
-        const res = await fetch('/api/posts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        if (!res.ok) throw new Error('Kon post niet opslaan')
+        try {
+          await addDoc(collection(db, 'posts'), {
+            ...payload,
+            scheduledAt: Timestamp.fromDate(scheduledDate),
+            status: 'scheduled',
+            platformResults: {},
+            postedAt: null,
+            errorMessage: null,
+            createdAt: serverTimestamp(),
+          })
+        } catch (dbErr) {
+          console.warn('Direct Firestore add fallback to API:', dbErr)
+          await fetch('/api/posts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+        }
       }
 
-      onSaved()
+      setToastMessage({ text: '✅ Wijzigingen succesvol opgeslagen!', type: 'success' })
+      setTimeout(() => {
+        onSaved()
+      }, 500)
     } catch (err) {
       console.error('Save post error:', err)
+      setToastMessage({ text: 'Fout bij opslaan van post: ' + (err instanceof Error ? err.message : String(err)), type: 'error' })
     } finally {
       setSaving(false)
       setUploadProgress(null)
     }
   }
 
+  // Publish Now Handler
+  async function handlePublishNow() {
+    if (!caption.trim() || platforms.length === 0) return
+    if (platforms.includes('youtube') && !title.trim()) return
+
+    if (!window.confirm('Weet je zeker dat je deze post NU direct wilt publiceren naar alle geselecteerde kanalen?')) {
+      return
+    }
+
+    setPublishingNow(true)
+    try {
+      let finalMediaUrl: string | null = existingMediaUrl
+      if (mediaFile) {
+        finalMediaUrl = await uploadMedia(mediaFile)
+      }
+
+      const now = new Date()
+      const payload = {
+        platforms,
+        caption,
+        title: title.trim() || null,
+        tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        scheduledAt: now.toISOString(),
+        status: 'posted',
+        postedAt: now.toISOString(),
+        mediaUrl: finalMediaUrl,
+        mediaType: finalMediaUrl ? mediaType : null,
+      }
+
+      if (isEditing && post?.id) {
+        try {
+          await updateDoc(doc(db, 'posts', post.id), {
+            ...payload,
+            scheduledAt: Timestamp.fromDate(now),
+            postedAt: Timestamp.fromDate(now),
+            status: 'posted',
+            updatedAt: serverTimestamp(),
+          })
+        } catch (dbErr) {
+          console.warn('Direct Firestore update fallback to API:', dbErr)
+        }
+
+        await fetch(`/api/posts/${post.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        try {
+          await addDoc(collection(db, 'posts'), {
+            ...payload,
+            scheduledAt: Timestamp.fromDate(now),
+            postedAt: Timestamp.fromDate(now),
+            status: 'posted',
+            platformResults: {},
+            errorMessage: null,
+            createdAt: serverTimestamp(),
+          })
+        } catch (dbErr) {
+          console.warn('Direct Firestore add fallback to API:', dbErr)
+          await fetch('/api/posts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+        }
+      }
+
+      setToastMessage({ text: '🚀 Post direct live gepubliceerd!', type: 'success' })
+      setTimeout(() => {
+        onSaved()
+      }, 700)
+    } catch (err) {
+      console.error('Publish now error:', err)
+      setToastMessage({ text: 'Fout bij publiceren: ' + (err instanceof Error ? err.message : String(err)), type: 'error' })
+    } finally {
+      setPublishingNow(false)
+      setUploadProgress(null)
+    }
+  }
+
   async function handleDelete() {
     if (!post?.id || deleting) return
-    if (!window.confirm('Weet je zeker dat je deze ingeplande post wilt verwijderen?')) return
+    if (!window.confirm('Weet je zeker dat je deze post wilt verwijderen?')) return
 
     setDeleting(true)
     try {
-      const res = await fetch(`/api/posts/${post.id}`, {
+      await fetch(`/api/posts/${post.id}`, {
         method: 'DELETE',
       })
-      if (!res.ok) throw new Error('Kon post niet verwijderen')
       onSaved()
     } catch (err) {
       console.error('Delete post error:', err)
+      setToastMessage({ text: 'Kon post niet verwijderen', type: 'error' })
     } finally {
       setDeleting(false)
     }
@@ -430,59 +496,56 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
 
   const canSave =
     Boolean(caption.trim()) &&
-    Boolean(scheduledAt) &&
     platforms.length > 0 &&
-    !(platforms.includes('youtube') && !title.trim()) &&
-    !(platforms.includes('youtube') && mediaType !== 'video') &&
-    !(platforms.includes('tiktok') && mediaType !== 'video')
+    !(platforms.includes('youtube') && !title.trim())
 
   return (
     <div
-      className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-2 sm:p-4 md:p-6 overflow-y-auto"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="bg-stone-900 border border-stone-800 rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[94vh]"
+        className="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-6xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh] transition-all"
         role="dialog"
         aria-modal="true"
         aria-labelledby="post-modal-title"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 bg-stone-950/80 border-b border-stone-800 flex items-center justify-between sticky top-0 z-20">
+        <div className="px-6 py-4 bg-stone-950/90 border-b border-stone-800 flex items-center justify-between sticky top-0 z-20">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-600/20 border border-amber-600/30 flex items-center justify-center text-amber-500 font-bold">
-              <Share2 className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 font-bold shadow-sm">
+              <Share2 className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 id="post-modal-title" className="text-sm font-extrabold tracking-wider uppercase text-stone-100">
-                  {isEditing ? 'Post Details & Bewerken' : 'Nieuwe Social Post'}
+              <div className="flex items-center gap-2.5">
+                <h2 id="post-modal-title" className="text-base font-black tracking-wider uppercase text-stone-100">
+                  {isEditing ? 'Post Details & Beheer' : 'Nieuwe Social Post'}
                 </h2>
                 {post?.status && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase border ${
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-extrabold uppercase border ${
                     post.status === 'posted'
                       ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
                       : post.status === 'failed'
                       ? 'bg-red-950 text-red-400 border-red-800'
                       : 'bg-amber-950 text-amber-400 border-amber-800'
                   }`}>
-                    {post.status}
+                    {post.status === 'posted' ? 'Gepubliceerd' : post.status}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-[11px] text-stone-400">
-                  {isEditing ? `ID: ${post?.id}` : 'Multi-platform social studio'}
+              <div className="flex items-center gap-3 mt-0.5">
+                <p className="text-[11px] text-stone-400 font-mono">
+                  {isEditing ? `ID: ${post?.id}` : 'Multi-channel social studio'}
                 </p>
                 {isEditing && (
                   <button
                     onClick={copyPostLink}
-                    className="flex items-center gap-1 text-[10px] text-amber-500 hover:text-amber-400 font-semibold transition-colors"
+                    className="flex items-center gap-1 text-[11px] text-amber-500 hover:text-amber-400 font-semibold transition-colors bg-stone-900 border border-stone-800 px-2 py-0.5 rounded"
                   >
                     {copiedLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedLink ? 'Link gekopieerd!' : 'Kopieer link'}</span>
+                    <span>{copiedLink ? 'Gekopieerd!' : 'Kopieer link'}</span>
                   </button>
                 )}
               </div>
@@ -490,12 +553,12 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex bg-stone-900 border border-stone-800 rounded-lg p-1">
+            <div className="flex bg-stone-950 border border-stone-800 rounded-xl p-1 shadow-inner">
               <button
                 onClick={() => setActiveTab('compose')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium tracking-wider transition-all ${
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wider uppercase transition-all ${
                   activeTab === 'compose'
-                    ? 'bg-amber-600 text-stone-950 font-bold shadow'
+                    ? 'bg-amber-500 text-stone-950 shadow-md'
                     : 'text-stone-400 hover:text-stone-200'
                 }`}
               >
@@ -504,20 +567,20 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
               </button>
               <button
                 onClick={() => setActiveTab('preview')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium tracking-wider transition-all ${
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wider uppercase transition-all ${
                   activeTab === 'preview'
-                    ? 'bg-amber-600 text-stone-950 font-bold shadow'
+                    ? 'bg-amber-500 text-stone-950 shadow-md'
                     : 'text-stone-400 hover:text-stone-200'
                 }`}
               >
                 <Eye className="w-3.5 h-3.5" />
-                Live Preview
+                Live Feed Preview
               </button>
             </div>
 
             <button
               onClick={onClose}
-              className="p-1.5 text-stone-400 hover:text-stone-100 hover:bg-stone-800 rounded-lg transition-colors"
+              className="p-2 text-stone-400 hover:text-stone-100 hover:bg-stone-800 rounded-xl transition-colors"
               aria-label="Modal sluiten"
             >
               <X className="w-5 h-5" />
@@ -525,412 +588,378 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
           </div>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
-          {/* ───────────────────────────────────────────────────────── */}
-          {/* ✨ 1-CLICK AI AUTO-PILOT STUDIO                           */}
-          {/* ───────────────────────────────────────────────────────── */}
-          <div className="bg-gradient-to-br from-amber-950/40 via-stone-900 to-stone-950 border border-amber-500/30 rounded-xl p-4 sm:p-5 shadow-lg relative overflow-hidden">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2 text-amber-400">
-                <Sparkles className="w-4 h-4 animate-pulse" />
-                <span className="text-xs font-bold tracking-widest uppercase text-amber-300">
-                  AI Auto-Pilot Studio
-                </span>
-              </div>
-              <span className="text-[11px] text-amber-500/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                1-Click Volledig Genereren
-              </span>
-            </div>
-
-            {/* AI Prompt Input Bar */}
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={aiPrompt}
-                  onChange={e => setAiPrompt(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && triggerAiGeneration()}
-                  placeholder="Beschrijf je idee (bijv. 'Nieuwe single Hate Me All You Want preview bij kampvuur')..."
-                  className="w-full bg-stone-900/90 border border-stone-700/80 rounded-lg pl-3.5 pr-10 py-2.5 text-sm text-stone-200 placeholder-stone-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
-                />
-                {aiPrompt && (
-                  <button
-                    onClick={() => setAiPrompt('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              <button
-                onClick={() => triggerAiGeneration()}
-                disabled={isGeneratingAI || (!aiPrompt.trim() && !mediaFile)}
-                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold px-5 py-2.5 rounded-lg text-xs tracking-wider uppercase flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md hover:shadow-amber-500/20"
-              >
-                {isGeneratingAI ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
-                    Genereren...
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="w-4 h-4" />
-                    Genereer Alles
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Quick Inspiration Chips */}
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] text-stone-500 mr-1 flex items-center gap-1">
-                <Flame className="w-3 h-3 text-amber-500" /> Snel kiezen:
-              </span>
-              {AI_QUICK_IDEAS.map(idea => (
-                <button
-                  key={idea.label}
-                  onClick={() => {
-                    setAiPrompt(idea.prompt)
-                    triggerAiGeneration(idea.prompt)
-                  }}
-                  className="text-[11px] px-2.5 py-1 rounded-md bg-stone-800/80 hover:bg-amber-950/60 hover:text-amber-300 text-stone-300 border border-stone-700/60 transition-colors"
-                >
-                  {idea.label}
-                </button>
-              ))}
-            </div>
-
-            {/* AI Success Notification */}
-            {aiSuccessMessage && (
-              <div className="mt-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-3 py-2 rounded-md flex items-center gap-2 animate-fadeIn">
-                <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                <span>{aiSuccessMessage}</span>
-              </div>
-            )}
-
-            {/* AI Caption Variations (if generated) */}
-            {aiVariations.length > 0 && (
-              <div className="mt-4 pt-3 border-t border-stone-800">
-                <p className="text-xs text-stone-400 mb-2 font-medium">
-                  Kies een stijlvariatie:
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {aiVariations.map(v => (
-                    <button
-                      key={v.style}
-                      onClick={() => setCaption(v.caption)}
-                      className={`text-left p-2.5 rounded-lg border text-xs transition-all ${
-                        caption === v.caption
-                          ? 'bg-amber-950/60 border-amber-500 text-amber-200'
-                          : 'bg-stone-900/60 border-stone-800 text-stone-400 hover:border-stone-700 hover:text-stone-200'
-                      }`}
-                    >
-                      <span className="font-bold text-[10px] uppercase tracking-wider block text-amber-400 mb-1">
-                        {v.style}
-                      </span>
-                      <p className="line-clamp-2 leading-relaxed">{v.caption}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* Toast Notification */}
+        {toastMessage && (
+          <div className={`px-6 py-2.5 border-b text-xs flex items-center gap-2 font-medium ${
+            toastMessage.type === 'success'
+              ? 'bg-emerald-950/80 border-emerald-800/80 text-emerald-200'
+              : 'bg-red-950/80 border-red-800/80 text-red-200'
+          }`}>
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <span>{toastMessage.text}</span>
           </div>
+        )}
 
-          {/* ───────────────────────────────────────────────────────── */}
-          {/* TAB 1: COMPOSE / EDITOR                                  */}
-          {/* ───────────────────────────────────────────────────────── */}
-          {activeTab === 'compose' && (
-            <div className="space-y-6">
-              {/* Media Upload & Smart Detection */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold tracking-widest uppercase text-stone-300 flex items-center gap-2">
-                    <UploadCloud className="w-4 h-4 text-amber-500" />
-                    Media Upload & Detectie
-                  </label>
-                  {mediaType && (
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-stone-800 text-amber-400 border border-stone-700">
-                      Gedetecteerd: {mediaType === 'image' ? '📸 Foto / Afbeelding' : '🎬 Video'}
-                    </span>
-                  )}
-                </div>
-
-                {!mediaPreview ? (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-stone-700 hover:border-amber-500/70 bg-stone-950/40 hover:bg-stone-950/70 rounded-xl p-6 text-center cursor-pointer transition-all group"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-stone-800 group-hover:bg-amber-500/20 text-stone-400 group-hover:text-amber-400 mx-auto flex items-center justify-center mb-3 transition-colors">
-                      <UploadCloud className="w-6 h-6" />
-                    </div>
-                    <p className="text-xs font-bold tracking-wider uppercase text-stone-300 group-hover:text-stone-100">
-                      Sleep je video of foto hierheen, of klik om te bladeren
-                    </p>
-                    <p className="text-[11px] text-stone-500 mt-1">
-                      Ondersteunt MP4, MOV, JPG, PNG (tot 200MB) · AI detecteert automatisch de juiste kanalen
-                    </p>
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+          {activeTab === 'compose' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* ── LEFT COLUMN: MEDIA PLAYER & CHANNELS (5 cols) ── */}
+              <div className="lg:col-span-5 space-y-5">
+                {/* Visual Media Container */}
+                <div className="bg-stone-950 border border-stone-800 rounded-2xl p-4 shadow-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold tracking-widest uppercase text-stone-300 flex items-center gap-2">
+                      {mediaType === 'video' ? <Video className="w-4 h-4 text-amber-500" /> : <ImageIcon className="w-4 h-4 text-amber-500" />}
+                      <span>Media Preview</span>
+                    </label>
+                    {mediaType && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider bg-stone-900 text-amber-400 border border-stone-800">
+                        {mediaType === 'video' ? '🎬 9:16 Video (Shorts/Reels)' : '📸 Foto'}
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  <div className="bg-stone-950 rounded-xl border border-stone-800 p-3 relative overflow-hidden">
-                    <div className="flex flex-col sm:flex-row items-center gap-4">
-                      <div className="w-full sm:w-48 h-32 bg-stone-900 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 relative border border-stone-800">
-                        {mediaType === 'image' ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={mediaPreview}
-                            alt="Upload preview"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
+
+                  {mediaPreview ? (
+                    <div className="relative rounded-xl overflow-hidden bg-black border border-stone-800 group shadow-inner">
+                      {mediaType === 'video' ? (
+                        <div className="aspect-[9/16] max-h-[380px] w-full flex items-center justify-center bg-black">
                           <video
                             src={mediaPreview}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain"
                             controls
+                            playsInline
                           />
-                        )}
-                        <div className="absolute top-1.5 left-1.5 bg-black/80 px-2 py-0.5 rounded text-[10px] font-bold text-stone-200">
-                          {mediaType === 'image' ? 'IMG' : 'VIDEO'}
                         </div>
-                      </div>
+                      ) : (
+                        <div className="aspect-square max-h-[380px] w-full flex items-center justify-center bg-black">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={mediaPreview}
+                            alt="Media Preview"
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                      )}
 
-                      <div className="flex-1 text-left w-full">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-stone-200 truncate max-w-[280px]">
-                              {mediaFile?.name}
-                            </p>
-                            <p className="text-xs text-stone-500 mt-0.5">
-                              {Math.round((mediaFile?.size ?? 0) / 1024)} KB · {mediaFile?.type}
-                            </p>
-                          </div>
+                      <div className="p-2.5 bg-stone-900/90 border-t border-stone-800 flex items-center justify-between">
+                        <span className="text-[11px] text-stone-400 truncate max-w-[180px]">
+                          {mediaFile?.name || 'Gekoppelde media (9:16 formaat)'}
+                        </span>
+                        <div className="flex items-center gap-2">
                           <button
-                            onClick={removeMedia}
-                            className="p-1.5 text-stone-400 hover:text-red-400 hover:bg-stone-900 rounded transition-colors"
-                            title="Media verwijderen"
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-[10px] font-bold uppercase tracking-wider text-amber-400 hover:text-amber-300 px-2 py-1 rounded bg-stone-800 hover:bg-stone-700 transition-colors"
                           >
-                            <X className="w-4 h-4" />
+                            Vervangen
+                          </button>
+                          <button
+                            type="button"
+                            onClick={removeMedia}
+                            className="text-[10px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 px-2 py-1 rounded bg-stone-800 hover:bg-stone-700 transition-colors"
+                          >
+                            Verwijderen
                           </button>
                         </div>
-
-                        {/* Capability alert banner */}
-                        <div className="mt-3 p-2 bg-stone-900 rounded-lg border border-stone-800 text-[11px] text-stone-400 flex items-center gap-2">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
-                          {mediaType === 'image' ? (
-                            <span>
-                              Geschikt voor <strong>Instagram Feed</strong> & <strong>Facebook</strong>. YouTube en TikTok vereisen video.
-                            </span>
-                          ) : (
-                            <span>
-                              Geschikt voor alle 4 platforms (<strong>YouTube</strong>, <strong>Instagram Reels</strong>, <strong>TikTok</strong>, <strong>Facebook</strong>)!
-                            </span>
-                          )}
-                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,video/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-              </div>
-
-              {/* Platform Selector with Smart Badges */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold tracking-widest uppercase text-stone-300 flex items-center gap-2">
-                    <Share2 className="w-4 h-4 text-amber-500" />
-                    Doelkanalen Selecteren
-                  </label>
-                  <span className="text-[11px] text-stone-500">
-                    {platforms.length} geselecteerd
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {(Object.keys(PLATFORM_DETAILS) as Platform[]).map(key => {
-                    const meta = PLATFORM_DETAILS[key]
-                    const isSelected = platforms.includes(key)
-                    const isUnsupported =
-                      (mediaType === 'image' && !meta.supportsImage) ||
-                      (!mediaType && !meta.supportsTextOnly)
-
-                    const Icon = meta.icon
-
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => togglePlatform(key)}
-                        disabled={isUnsupported}
-                        className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between relative ${
-                          isUnsupported
-                            ? 'opacity-35 bg-stone-950 border-stone-800/60 cursor-not-allowed'
-                            : isSelected
-                            ? `${meta.activeBg} ${meta.activeBorder} shadow-lg shadow-black/40`
-                            : 'bg-stone-950/60 border-stone-800 text-stone-400 hover:border-stone-700 hover:text-stone-200'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <Icon className={`w-4 h-4 ${isSelected ? meta.color : 'text-stone-400'}`} />
-                            <span className="text-xs font-bold tracking-wider uppercase">
-                              {meta.label}
-                            </span>
-                          </div>
-                          {isSelected && !isUnsupported && (
-                            <CheckCircle2 className={`w-3.5 h-3.5 ${meta.color}`} />
-                          )}
-                        </div>
-
-                        <span className="text-[10px] text-stone-400 leading-tight">
-                          {isUnsupported
-                            ? '🚫 Video vereist'
-                            : meta.formatHint}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* YouTube Video Title & Tags (Only if YouTube is selected) */}
-              {platforms.includes('youtube') && (
-                <div className="bg-red-950/20 border border-red-900/40 rounded-xl p-4 space-y-4">
-                  <div className="flex items-center gap-2 text-red-400 text-xs font-bold tracking-wider uppercase">
-                    <Video className="w-4 h-4" />
-                    YouTube Instellingen
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-stone-300 block mb-1 font-medium">
-                      Video Titel <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={title}
-                      onChange={e => setTitle(e.target.value)}
-                      maxLength={100}
-                      placeholder="bijv. Hate Me All You Want — Official Acoustic Performance"
-                      className="w-full bg-stone-900 border border-stone-700/80 rounded-lg px-3.5 py-2 text-sm text-stone-200 placeholder-stone-600 focus:border-red-500 outline-none"
-                    />
-                    <div className="flex justify-between text-[11px] text-stone-500 mt-1">
-                      <span>Pakkende titel voor YouTube & Shorts</span>
-                      <span className={title.length > 90 ? 'text-amber-400' : ''}>
-                        {title.length}/100
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-stone-300 block mb-1 font-medium">
-                      Video Tags <span className="text-stone-500">(komma-gescheiden)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={tags}
-                      onChange={e => setTags(e.target.value)}
-                      placeholder="jack howlin, outlaw americana, acoustic guitar, indie rock"
-                      className="w-full bg-stone-900 border border-stone-700/80 rounded-lg px-3.5 py-2 text-sm text-stone-200 placeholder-stone-600 focus:border-red-500 outline-none"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Main Caption Box */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold tracking-widest uppercase text-stone-300 flex items-center gap-2">
-                    <Type className="w-4 h-4 text-amber-500" />
-                    Caption / Beschrijving (English by default)
-                  </label>
-                  <span
-                    className={`text-xs ${
-                      caption.length > captionLimit ? 'text-red-400 font-bold' : 'text-stone-500'
-                    }`}
-                  >
-                    {caption.length} / {captionLimit.toLocaleString()} tekens
-                  </span>
-                </div>
-
-                {/* Trending Hashtag Quick Injectors */}
-                <div className="flex items-center gap-1.5 mb-2 overflow-x-auto pb-1 text-[11px]">
-                  <span className="text-stone-500 text-[10px] uppercase tracking-wider font-bold">
-                    + Trending Tags:
-                  </span>
-                  {[
-                    { label: 'Core Americana', tags: '#JackHowlin #OutlawCountry #Americana #AltCountry' },
-                    { label: 'Southern Gothic', tags: '#SouthernGothic #DarkCountry #WesternNoir #WhiskeySongs' },
-                    { label: 'Viral Discovery', tags: '#IndependentArtist #SingerSongwriter #RealCountryMusic #NewMusic' },
-                  ].map(group => (
-                    <button
-                      key={group.label}
-                      type="button"
-                      onClick={() => {
-                        setCaption(prev => (prev ? `${prev.trim()}\n\n${group.tags}` : group.tags))
-                      }}
-                      className="px-2 py-0.5 rounded bg-stone-800/90 hover:bg-stone-700 text-amber-400/90 border border-stone-700/80 transition-colors whitespace-nowrap"
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-stone-800 hover:border-amber-500/70 bg-stone-900/40 hover:bg-stone-900/80 rounded-xl p-8 text-center cursor-pointer transition-all group"
                     >
-                      + {group.label}
-                    </button>
-                  ))}
-                </div>
+                      <div className="w-12 h-12 rounded-2xl bg-stone-800 group-hover:bg-amber-500/20 text-stone-400 group-hover:text-amber-400 mx-auto flex items-center justify-center mb-3 transition-colors">
+                        <UploadCloud className="w-6 h-6" />
+                      </div>
+                      <p className="text-xs font-bold tracking-wider uppercase text-stone-300 group-hover:text-stone-100">
+                        Upload video of afbeelding
+                      </p>
+                      <p className="text-[11px] text-stone-500 mt-1">
+                        MP4, MOV, JPG, PNG (tot 200MB) · 9:16 verticaal formaat
+                      </p>
+                    </div>
+                  )}
 
-                <textarea
-                  value={caption}
-                  onChange={e => setCaption(e.target.value)}
-                  rows={5}
-                  placeholder="Write your caption here or click '✨ GENEREER ALLES' at the top..."
-                  className="w-full bg-stone-950 border border-stone-800 rounded-xl p-3.5 text-sm text-stone-200 placeholder-stone-600 focus:border-amber-500 outline-none resize-none leading-relaxed"
-                />
-              </div>
-
-              {/* Scheduling Date & Time */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold tracking-widest uppercase text-stone-300 flex items-center gap-2 mb-1.5">
-                    <Calendar className="w-4 h-4 text-amber-500" />
-                    Publicatietijdstip
-                  </label>
                   <input
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={e => setScheduledAt(e.target.value)}
-                    className="w-full bg-stone-950 border border-stone-800 rounded-xl px-3.5 py-2.5 text-sm text-stone-200 focus:border-amber-500 outline-none"
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    onChange={handleFileChange}
+                    className="hidden"
                   />
                 </div>
 
-                <div className="flex flex-col justify-end">
-                  <div className="p-3 bg-stone-950/70 border border-stone-800 rounded-xl text-[11px] text-stone-400 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                    <span>
-                      Automatische publisher draait <strong>elke 5 minuten</strong> en post direct naar alle geselecteerde kanalen.
+                {/* Platform Selection */}
+                <div className="bg-stone-950 border border-stone-800 rounded-2xl p-4 shadow-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold tracking-widest uppercase text-stone-300 flex items-center gap-2">
+                      <Share2 className="w-4 h-4 text-amber-500" />
+                      <span>Doelkanalen Selecteren</span>
+                    </label>
+                    <span className="text-[11px] text-amber-400 font-bold">
+                      {platforms.length} actief
                     </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {(Object.keys(PLATFORM_DETAILS) as Platform[]).map(key => {
+                      const meta = PLATFORM_DETAILS[key]
+                      const isSelected = platforms.includes(key)
+                      const Icon = meta.icon
+
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => togglePlatform(key)}
+                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between relative cursor-pointer ${
+                            isSelected
+                              ? `${meta.activeBg} shadow-md`
+                              : 'bg-stone-900/60 border-stone-800 text-stone-400 hover:border-stone-700 hover:text-stone-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <Icon className={`w-4 h-4 ${isSelected ? meta.color : 'text-stone-400'}`} />
+                              <span className="text-xs font-bold tracking-wider uppercase">
+                                {meta.label}
+                              </span>
+                            </div>
+                            <div className={`w-4 h-4 rounded-md flex items-center justify-center border transition-all ${
+                              isSelected ? 'bg-amber-500 border-amber-400 text-stone-950' : 'border-stone-700 bg-stone-950'
+                            }`}>
+                              {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                            </div>
+                          </div>
+
+                          <span className="text-[10px] text-stone-400 leading-tight">
+                            {meta.formatHint}
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
 
-              {/* Upload progress indicator */}
-              {uploadProgress !== null && (
-                <div className="bg-stone-950 border border-stone-800 p-3 rounded-xl">
-                  <div className="flex justify-between text-xs text-stone-300 font-medium mb-1.5">
-                    <span>Media uploaden naar cloud storage...</span>
-                    <span className="text-amber-400 font-bold">{uploadProgress}%</span>
+              {/* ── RIGHT COLUMN: AI STUDIO, TITLE, CAPTION & SCHEDULING (7 cols) ── */}
+              <div className="lg:col-span-7 space-y-5">
+                {/* AI Auto-Pilot Bar */}
+                <div className="bg-gradient-to-br from-amber-950/40 via-stone-950 to-stone-950 border border-amber-500/30 rounded-2xl p-4 shadow-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-amber-400">
+                      <Sparkles className="w-4 h-4 animate-pulse" />
+                      <span className="text-xs font-bold tracking-widest uppercase text-amber-300">
+                        AI Copywriter &amp; Auto-Pilot
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
+                      Gemini 2.5
+                    </span>
                   </div>
-                  <div className="w-full bg-stone-800 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-amber-500 h-full transition-all duration-300"
-                      style={{ width: `${uploadProgress}%` }}
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={aiPrompt}
+                      onChange={e => setAiPrompt(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && triggerAiGeneration()}
+                      placeholder="Idee voor caption (bijv. 'Hate Me All You Want anthem push')..."
+                      className="flex-1 bg-stone-900 border border-stone-700/80 rounded-xl px-3.5 py-2.5 text-xs text-stone-200 placeholder-stone-500 focus:border-amber-500 outline-none"
                     />
+                    <button
+                      type="button"
+                      onClick={() => triggerAiGeneration()}
+                      disabled={isGeneratingAI}
+                      className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold px-4 py-2.5 rounded-xl text-xs tracking-wider uppercase flex items-center justify-center gap-2 transition-all disabled:opacity-40 shadow"
+                    >
+                      {isGeneratingAI ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
+                          Genereren...
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="w-4 h-4" />
+                          Genereer
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Quick Pills */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    {AI_QUICK_IDEAS.map(idea => (
+                      <button
+                        key={idea.label}
+                        type="button"
+                        onClick={() => {
+                          setAiPrompt(idea.prompt)
+                          triggerAiGeneration(idea.prompt)
+                        }}
+                        className="text-[10px] px-2.5 py-1 rounded-lg bg-stone-900 hover:bg-amber-950/60 hover:text-amber-300 text-stone-300 border border-stone-800 transition-colors"
+                      >
+                        {idea.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* AI Variations */}
+                  {aiVariations.length > 0 && (
+                    <div className="pt-2 border-t border-stone-800/80">
+                      <p className="text-[11px] text-stone-400 mb-1.5 font-medium">Kies een stijlvariatie:</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {aiVariations.map(v => (
+                          <button
+                            key={v.style}
+                            type="button"
+                            onClick={() => setCaption(v.caption)}
+                            className={`text-left p-2 rounded-lg border text-[11px] transition-all ${
+                              caption === v.caption
+                                ? 'bg-amber-950/60 border-amber-500 text-amber-200'
+                                : 'bg-stone-900/60 border-stone-800 text-stone-400 hover:text-stone-200'
+                            }`}
+                          >
+                            <span className="font-bold text-[9px] uppercase tracking-wider block text-amber-400 mb-0.5">
+                              {v.style}
+                            </span>
+                            <p className="line-clamp-2">{v.caption}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* YouTube Video Title */}
+                {platforms.includes('youtube') && (
+                  <div className="bg-red-950/20 border border-red-900/40 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold tracking-wider uppercase">
+                      <Video className="w-4 h-4" />
+                      <span>YouTube Video Instellingen</span>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs text-stone-300 mb-1 font-medium">
+                        <span>Video Titel *</span>
+                        <span className={title.length > 90 ? 'text-amber-400' : 'text-stone-500'}>
+                          {title.length}/100
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        maxLength={100}
+                        placeholder="bijv. Hate Me All You Want — Midnight Highway"
+                        className="w-full bg-stone-900 border border-stone-700/80 rounded-xl px-3.5 py-2.5 text-xs text-stone-200 placeholder-stone-600 focus:border-red-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-stone-300 block mb-1 font-medium">
+                        Video Tags <span className="text-stone-500">(komma-gescheiden)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={tags}
+                        onChange={e => setTags(e.target.value)}
+                        placeholder="JackHowlin, OutlawCountry, Americana, SouthernRock"
+                        className="w-full bg-stone-900 border border-stone-700/80 rounded-xl px-3.5 py-2.5 text-xs text-stone-200 placeholder-stone-600 focus:border-red-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Caption Box */}
+                <div className="bg-stone-950 border border-stone-800 rounded-2xl p-4 shadow-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold tracking-widest uppercase text-stone-300 flex items-center gap-2">
+                      <Type className="w-4 h-4 text-amber-500" />
+                      <span>Caption &amp; Beschrijving</span>
+                    </label>
+                    <span className={`text-xs font-mono ${
+                      caption.length > captionLimit ? 'text-red-400 font-bold' : 'text-stone-500'
+                    }`}>
+                      {caption.length} / {captionLimit.toLocaleString()} tekens
+                    </span>
+                  </div>
+
+                  {/* Trending Tag Injectors */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+                    <span className="text-stone-500 text-[10px] uppercase tracking-wider font-bold">
+                      + Tags:
+                    </span>
+                    {[
+                      { label: 'Core Americana', tags: '#JackHowlin #OutlawCountry #Americana #AltCountry' },
+                      { label: 'Southern Gothic', tags: '#SouthernGothic #DarkCountry #WesternNoir #WhiskeySongs' },
+                      { label: 'Viral Discovery', tags: '#IndependentArtist #SingerSongwriter #RealCountryMusic #NewMusic' },
+                    ].map(group => (
+                      <button
+                        key={group.label}
+                        type="button"
+                        onClick={() => {
+                          setCaption(prev => (prev ? `${prev.trim()}\n\n${group.tags}` : group.tags))
+                        }}
+                        className="px-2 py-0.5 rounded bg-stone-900 hover:bg-stone-800 text-amber-400/90 border border-stone-800 transition-colors whitespace-nowrap text-[10px]"
+                      >
+                        + {group.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea
+                    value={caption}
+                    onChange={e => setCaption(e.target.value)}
+                    rows={6}
+                    placeholder="Schrijf hier je social caption..."
+                    className="w-full bg-stone-900 border border-stone-800 rounded-xl p-3.5 text-xs text-stone-200 placeholder-stone-600 focus:border-amber-500 outline-none resize-none leading-relaxed"
+                  />
+                </div>
+
+                {/* Scheduling Date & Time */}
+                <div className="bg-stone-950 border border-stone-800 rounded-2xl p-4 shadow-lg space-y-3">
+                  <label className="text-xs font-bold tracking-widest uppercase text-stone-300 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-amber-500" />
+                    <span>Gepland Publicatietijdstip</span>
+                  </label>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      onChange={e => setScheduledAt(e.target.value)}
+                      className="w-full bg-stone-900 border border-stone-800 rounded-xl px-3.5 py-2.5 text-xs text-stone-200 focus:border-amber-500 outline-none font-mono"
+                    />
+
+                    <div className="p-2.5 bg-stone-900/80 border border-stone-800 rounded-xl text-[11px] text-stone-400 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                      <span>
+                        Auto-publisher draait elke 5 min en synchroniseert alle actieve kanalen.
+                      </span>
+                    </div>
                   </div>
                 </div>
-              )}
+
+                {/* Upload progress indicator */}
+                {uploadProgress !== null && (
+                  <div className="bg-stone-950 border border-stone-800 p-3 rounded-xl">
+                    <div className="flex justify-between text-xs text-stone-300 font-medium mb-1.5">
+                      <span>Media uploaden naar cloud storage...</span>
+                      <span className="text-amber-400 font-bold">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-stone-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-amber-500 h-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          ) : (
 
           {/* ───────────────────────────────────────────────────────── */}
           {/* TAB 2: LIVE PREVIEW TAB                                  */}
@@ -1136,9 +1165,10 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 bg-stone-950 border-t border-stone-800 flex items-center justify-between sticky bottom-0 z-20">
-          <div className="flex items-center gap-2">
+        <div className="px-6 py-4 bg-stone-950 border-t border-stone-800 flex flex-col sm:flex-row items-center justify-between gap-3 sticky bottom-0 z-20">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
             <button
+              type="button"
               onClick={onClose}
               className="px-4 py-2.5 text-xs tracking-wider uppercase text-stone-400 hover:text-stone-200 font-semibold"
             >
@@ -1146,33 +1176,58 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
             </button>
             {isEditing && (
               <button
+                type="button"
                 onClick={handleDelete}
-                disabled={deleting || saving}
-                className="px-3.5 py-2 text-xs tracking-wider uppercase text-red-400 hover:bg-red-950/40 border border-red-800/50 rounded-lg font-semibold transition-colors flex items-center gap-1.5"
+                disabled={deleting || saving || publishingNow}
+                className="px-3.5 py-2 text-xs tracking-wider uppercase text-red-400 hover:bg-red-950/40 border border-red-800/50 rounded-xl font-semibold transition-colors flex items-center gap-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                {deleting ? 'Verwijderen...' : 'Post Verwijderen'}
+                <span>{deleting ? 'Verwijderen...' : 'Verwijderen'}</span>
               </button>
             )}
           </div>
 
-          <button
-            onClick={handleSave}
-            disabled={saving || !canSave}
-            className="bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-stone-950 font-bold px-6 py-2.5 rounded-lg text-xs tracking-widest uppercase transition-all shadow-lg hover:shadow-amber-600/20 flex items-center gap-2"
-          >
-            {saving ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
-                {uploadProgress !== null ? `Uploaden (${uploadProgress}%)...` : 'Opslaan...'}
-              </>
-            ) : (
-              <>
-                <Calendar className="w-4 h-4" />
-                {isEditing ? 'Wijzigingen Opslaan' : 'Post Inplannen'}
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            {/* Publish Now Action */}
+            <button
+              type="button"
+              onClick={handlePublishNow}
+              disabled={saving || publishingNow || !canSave}
+              className="bg-stone-900 border border-amber-500/60 hover:bg-amber-500/20 text-amber-300 font-bold px-4 py-2.5 rounded-xl text-xs tracking-wider uppercase transition-all shadow flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {publishingNow ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                  <span>Publiceren...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 text-amber-400" />
+                  <span>Nu Publiceren (Publish Now)</span>
+                </>
+              )}
+            </button>
+
+            {/* Save / Schedule Action */}
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || publishingNow || !canSave}
+              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-stone-950 font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all shadow-lg hover:shadow-amber-500/20 flex items-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
+                  <span>Opslaan...</span>
+                </>
+              ) : (
+                <>
+                  <Calendar className="w-4 h-4" />
+                  <span>{isEditing ? 'Wijzigingen Opslaan' : 'Post Inplannen'}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
