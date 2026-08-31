@@ -172,7 +172,7 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
 
   // Form State
   const [platforms, setPlatforms] = useState<Platform[]>(
-    post?.platforms?.length ? post.platforms : ['instagram', 'facebook']
+    post?.platforms?.length ? post.platforms : ['youtube', 'instagram', 'tiktok', 'facebook']
   )
   const [caption, setCaption] = useState(post?.caption || '')
   const [title, setTitle] = useState(post?.title || '')
@@ -196,14 +196,8 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Tabs & preview state
-  const [activeTab, setActiveTab] = useState<'compose' | 'preview'>('compose')
-  const [previewPlatform, setPreviewPlatform] = useState<Platform>('instagram')
-  const [copiedLink, setCopiedLink] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const [publishingNow, setPublishingNow] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // AI Auto-Pilot State
   const [aiPrompt, setAiPrompt] = useState('')
@@ -960,11 +954,6 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
               </div>
             </div>
           ) : (
-
-          {/* ───────────────────────────────────────────────────────── */}
-          {/* TAB 2: LIVE PREVIEW TAB                                  */}
-          {/* ───────────────────────────────────────────────────────── */}
-          {activeTab === 'preview' && (
             <div className="space-y-6">
               {/* Platform Switcher for Preview */}
               <div className="flex items-center justify-between border-b border-stone-800 pb-3">
