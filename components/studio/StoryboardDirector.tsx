@@ -13,7 +13,6 @@ import {
   X,
   Clock,
   AlertCircle,
-  CheckCircle2,
   Sliders,
   MoveHorizontal,
   Compass,

@@ -45,3 +45,10 @@ firebase-debug.log
 
 # Firebase local deploy cache
 .firebase/
+
+# Local media generation & scratch folders
+/projects/
+/tmp/
+*.mp4
+*.wav
+*.m4a

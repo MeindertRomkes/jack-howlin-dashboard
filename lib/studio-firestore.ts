@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from './firebase-admin'
-import type { KieJob, MediaAsset, SunoTrack, JackCoreSetPhoto, AudioSnippet, StoryboardJob, StoryboardScene } from '@/types'
+import type { KieJob, MediaAsset, SunoTrack, JackCoreSetPhoto, AudioSnippet, StoryboardJob } from '@/types'
 
 export async function getJackCoreSet(): Promise<JackCoreSetPhoto[]> {
   const snap = await adminDb.collection('jack_core_set').orderBy('order', 'asc').get()

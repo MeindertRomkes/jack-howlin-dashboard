@@ -292,26 +292,26 @@ git commit -m "feat(studio): add visual StoryboardDirector UI component"
 **Interfaces:**
 - Produces: `<StoryboardProgress jobId={jobId} onComplete={(masterUrl) => void} onError={(err) => void} />`
 
-- [ ] **Step 1: Write test for StoryboardProgress component**
+- [x] **Step 1: Write test for StoryboardProgress component**
 
 Create `tests/components/StoryboardProgress.test.tsx` testing scene progress state indicators.
 
-- [ ] **Step 2: Run test**
+- [x] **Step 2: Run test**
 
 Run: `npx vitest run tests/components/StoryboardProgress.test.tsx`
 
-- [ ] **Step 3: Implement `components/studio/StoryboardProgress.tsx`**
+- [x] **Step 3: Implement `components/studio/StoryboardProgress.tsx`**
 
 Listens to Firestore `storyboard_jobs/{jobId}` in realtime:
 - Shows individual scene render statuses with spinning loaders and checkmarks.
 - Shows stitching status.
 - Once complete, plays the Master 37s video with a direct `[📅 Direct Inplannen in Kalender]` button!
 
-- [ ] **Step 4: Run test to verify**
+- [x] **Step 4: Run test to verify**
 
 Run: `npx vitest run tests/components/StoryboardProgress.test.tsx`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add components/studio/StoryboardProgress.tsx app/(dashboard)/studio/page.tsx tests/components/StoryboardProgress.test.tsx

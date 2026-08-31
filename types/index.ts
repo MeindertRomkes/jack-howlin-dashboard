@@ -198,12 +198,14 @@ export interface IntelligenceReport {
 
 // ─── AI Content Studio ───────────────────────────────────────────────────────
 
+export type StudioEngine = 'higgsfield' | 'kie'
 export type KieModel = 'photo' | 'video'
 export type KieState = 'waiting' | 'success' | 'fail'
 
 export interface KieJob {
   id: string
   taskId: string
+  provider?: StudioEngine
   model: KieModel
   kieModel: string
   state: KieState
@@ -229,7 +231,7 @@ export interface MediaAsset {
   snippetId?: string
   suggestedCaption?: string
   prompt: string
-  kieJobId: string
+  kieJobId?: string
   linkedPostId?: string
   createdAt: Timestamp
 }
