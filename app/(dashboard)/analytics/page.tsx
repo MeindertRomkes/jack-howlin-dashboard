@@ -67,6 +67,62 @@ const DEFAULT_TOP_TRACKS: TrackPerformance[] = [
   },
 ]
 
+interface PlaybookDisplayItem {
+  id?: string
+  title?: string
+  playbookName?: string
+  reason?: string
+  objective?: string
+  steps?: string[]
+  type?: string
+  actionPayload?: { caption?: string; suggestedFormat?: string }
+}
+
+interface HookDisplayItem {
+  hookTitle?: string
+  trackTitle?: string
+  visualConcept?: string
+  effectivenessMultiplier?: string
+  performanceMetric?: string
+  description?: string
+  whyItWorks?: string
+  exampleScene?: string
+}
+
+interface WindowDisplayItem {
+  platform?: string
+  bestDay?: string
+  bestTime?: string
+  recommendedTimes?: string[]
+  reason?: string
+  rationale?: string
+}
+
+// ── Defensive helper functions to prevent any React child object crashes ──
+
+function extractSummaryText(summary: unknown): string {
+  if (!summary) return ''
+  if (typeof summary === 'string') return summary
+  if (typeof summary === 'object' && summary !== null) {
+    const s = summary as Record<string, unknown>
+    if (typeof s.strategicTakeaway === 'string') return s.strategicTakeaway
+    if (typeof s.headline === 'string') return s.headline
+    if (typeof s.summary === 'string') return s.summary
+  }
+  return String(summary)
+}
+
+function extractAlertItem(alert: unknown): { title: string; detail?: string } {
+  if (typeof alert === 'string') return { title: alert }
+  if (typeof alert === 'object' && alert !== null) {
+    const a = alert as Record<string, unknown>
+    const title = [a.category, a.issue].filter(Boolean).join(' — ') || (typeof a.alert === 'string' ? a.alert : 'Signaal')
+    const detail = [a.dataPoint, a.risk, a.remedy].filter(Boolean).join(' • ')
+    return { title, detail: detail || undefined }
+  }
+  return { title: String(alert) }
+}
+
 export default function AnalyticsPage() {
   const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null)
   const [report, setReport] = useState<IntelligenceReport | null>(null)
@@ -82,7 +138,7 @@ export default function AnalyticsPage() {
         getLatestIntelligenceReport(),
       ])
       if (snapData) setSnapshot(snapData)
-      if (repData && repData.winningHooks?.length) setReport(repData)
+      if (repData) setReport(repData)
     } catch (err) {
       console.error('Error loading analytics data:', err)
     } finally {
@@ -103,7 +159,7 @@ export default function AnalyticsPage() {
       if (!syncRes.ok) throw new Error('Live data synchronisatie mislukt')
       const syncJson = await syncRes.json()
       if (syncJson.data) setSnapshot(syncJson.data)
-      
+
       // 2. Generate updated Gemini Intelligence Report
       const insightRes = await fetch('/api/analytics/insights', { method: 'POST' })
       if (!insightRes.ok) throw new Error('Intelligence analyse genereren mislukt')
@@ -129,6 +185,8 @@ export default function AnalyticsPage() {
   const totalComments = snapshot?.totalCommentsCount || 340
   const avgRetention = snapshot?.youtube?.avgWatchPercentage || 71.4
 
+  const summaryText = extractSummaryText(report?.summary)
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-16">
       {/* ───────────────────────────────────────────────────────── */}
@@ -141,7 +199,7 @@ export default function AnalyticsPage() {
               <BarChart3 className="w-4 h-4" />
             </div>
             <h1 className="text-xl font-extrabold tracking-wider uppercase text-stone-100">
-              Data & Intelligence Command Hub
+              Data &amp; Intelligence Command Hub
             </h1>
           </div>
           <p className="text-stone-400 text-xs max-w-2xl leading-relaxed">
@@ -174,25 +232,6 @@ export default function AnalyticsPage() {
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="bg-stone-900 border border-stone-800 rounded-xl p-4 h-28 animate-pulse" />
           ))}
-        </div>
-      )}
-
-      {/* Empty state — no report yet */}
-      {!loading && !report && (
-        <div className="bg-stone-900 border border-stone-800 rounded-xl p-12 text-center shadow-lg">
-          <BarChart3 className="w-12 h-12 text-stone-600 mx-auto mb-3" />
-          <h2 className="text-base font-bold text-stone-200 mb-2">Nog geen intelligence rapport beschikbaar</h2>
-          <p className="text-stone-500 text-xs max-w-sm mx-auto mb-4">
-            Klik op &quot;Sync Live Data &amp; AI&quot; om voor het eerst je YouTube, Spotify en Instagram data te synchroniseren en een Gemini analyse te genereren.
-          </p>
-          <button
-            onClick={handleLiveSync}
-            disabled={syncing}
-            className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-stone-950 font-bold px-5 py-2.5 rounded-lg text-xs uppercase tracking-wider transition-all shadow flex items-center gap-2 mx-auto"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            <span>{syncing ? 'Analyseren...' : 'Sync Live Data & AI'}</span>
-          </button>
         </div>
       )}
 
@@ -297,7 +336,7 @@ export default function AnalyticsPage() {
               : 'text-stone-400 hover:text-stone-200'
           }`}
         >
-          Overzicht & AI Inzichten
+          Overzicht &amp; AI Inzichten
         </button>
         <button
           onClick={() => setActiveTab('hooks')}
@@ -307,7 +346,7 @@ export default function AnalyticsPage() {
               : 'text-stone-400 hover:text-stone-200'
           }`}
         >
-          Winning Hooks & Formats
+          Winning Hooks &amp; Formats
         </button>
         <button
           onClick={() => setActiveTab('tracks')}
@@ -327,7 +366,7 @@ export default function AnalyticsPage() {
               : 'text-stone-400 hover:text-stone-200'
           }`}
         >
-          Platform Breakdown & Timing
+          Platform Breakdown &amp; Timing
         </button>
       </div>
 
@@ -337,7 +376,7 @@ export default function AnalyticsPage() {
       {activeTab === 'overview' && (
         <div className="space-y-6">
           {/* AI Summary Banner */}
-          {report?.summary && (
+          {summaryText && (
             <div className="bg-gradient-to-r from-amber-950/40 via-stone-900 to-stone-900 border border-amber-500/30 p-5 rounded-xl flex items-start gap-3.5 shadow-md">
               <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0 mt-0.5">
                 <Sparkles className="w-4 h-4" />
@@ -347,7 +386,7 @@ export default function AnalyticsPage() {
                   Gemini Performance Intelligence Samenvatting
                 </h2>
                 <p className="text-xs text-stone-200 leading-relaxed font-medium">
-                  {report.summary}
+                  {summaryText}
                 </p>
               </div>
             </div>
@@ -368,50 +407,56 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(report?.actionablePlaybooks || []).map((playbook, idx) => (
-                <div
-                  key={playbook.id || idx}
-                  className="bg-stone-950 border border-stone-800 rounded-xl p-4 space-y-3 hover:border-amber-500/40 transition-all flex flex-col justify-between"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                        {playbook.type === 'merch_push'
-                          ? '👕 Merch Drop'
-                          : playbook.type === 'lyric_short'
-                          ? '🎥 Lyric Short'
-                          : '🎵 Release Push'}
-                      </span>
-                      <span className="text-[10px] font-bold text-red-400 bg-red-950/40 border border-red-900/60 px-1.5 py-0.5 rounded uppercase">
-                        Hoge Prioriteit
-                      </span>
+              {((report?.actionablePlaybooks || []) as PlaybookDisplayItem[]).map((playbook, idx) => {
+                const title = playbook.title || playbook.playbookName || `Aanbevolen Actie #${idx + 1}`
+                const reason = playbook.reason || playbook.objective || (Array.isArray(playbook.steps) ? playbook.steps.join(' ') : '')
+                const caption = playbook.actionPayload?.caption || (Array.isArray(playbook.steps) ? playbook.steps[0] : '')
+
+                return (
+                  <div
+                    key={playbook.id || idx}
+                    className="bg-stone-950 border border-stone-800 rounded-xl p-4 space-y-3 hover:border-amber-500/40 transition-all flex flex-col justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                          {playbook.type === 'merch_push'
+                            ? '👕 Merch Drop'
+                            : playbook.type === 'lyric_short'
+                            ? '🎥 Lyric Short'
+                            : '🎵 Release Push'}
+                        </span>
+                        <span className="text-[10px] font-bold text-red-400 bg-red-950/40 border border-red-900/60 px-1.5 py-0.5 rounded uppercase">
+                          Hoge Prioriteit
+                        </span>
+                      </div>
+
+                      <h3 className="text-xs font-bold text-stone-100">
+                        {title}
+                      </h3>
+                      {reason && (
+                        <p className="text-[11px] text-stone-400 leading-relaxed">
+                          <strong className="text-stone-300">Waarom:</strong> {reason}
+                        </p>
+                      )}
+
+                      {caption && (
+                        <div className="bg-stone-900/80 p-2.5 rounded-lg border border-stone-800 text-[11px] text-stone-300 italic">
+                          &ldquo;{caption}&rdquo;
+                        </div>
+                      )}
                     </div>
 
-                    <h3 className="text-xs font-bold text-stone-100">
-                      {playbook.title}
-                    </h3>
-                    <p className="text-[11px] text-stone-400 leading-relaxed">
-                      <strong className="text-stone-300">Waarom:</strong> {playbook.reason}
-                    </p>
-
-                    {playbook.actionPayload?.caption && (
-                      <div className="bg-stone-900/80 p-2.5 rounded-lg border border-stone-800 text-[11px] text-stone-300 italic">
-                        &ldquo;{playbook.actionPayload.caption}&rdquo;
-                      </div>
-                    )}
+                    <Link
+                      href={`/calendar?presetCaption=${encodeURIComponent(caption || '')}`}
+                      className="w-full bg-stone-800 hover:bg-amber-600 hover:text-stone-950 text-stone-200 font-bold py-2 px-3 rounded-lg text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow mt-2"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Plan Direct In Kalender ➔</span>
+                    </Link>
                   </div>
-
-                  <Link
-                    href={`/calendar?presetCaption=${encodeURIComponent(
-                      playbook.actionPayload?.caption || ''
-                    )}`}
-                    className="w-full bg-stone-800 hover:bg-amber-600 hover:text-stone-950 text-stone-200 font-bold py-2 px-3 rounded-lg text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow"
-                  >
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>Plan Direct In Kalender ➔</span>
-                  </Link>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </section>
         </div>
@@ -426,37 +471,48 @@ export default function AnalyticsPage() {
             <div className="flex items-center gap-2 border-b border-stone-800 pb-3">
               <Sparkles className="w-4 h-4 text-amber-500" />
               <h2 className="text-sm font-extrabold uppercase tracking-wider text-stone-200">
-                Top Scorende Video-Hooks & Formats (Gemini Pattern Intelligence)
+                Top Scorende Video-Hooks &amp; Formats (Gemini Pattern Intelligence)
               </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(report?.winningHooks || []).map((hook, idx) => (
-                <div
-                  key={idx}
-                  className="bg-stone-950 border border-stone-800 rounded-xl p-4 space-y-2.5 hover:border-stone-700 transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider">
-                      {hook.hookTitle}
-                    </h3>
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded">
-                      {hook.effectivenessMultiplier}
-                    </span>
-                  </div>
+              {((report?.winningHooks || []) as HookDisplayItem[]).map((hook, idx) => {
+                const hookTitle = hook.hookTitle || hook.trackTitle || hook.visualConcept || `Hook #${idx + 1}`
+                const multiplier = hook.effectivenessMultiplier || hook.performanceMetric || 'Top Score'
+                const desc = hook.description || hook.whyItWorks || ''
+                const scene = hook.exampleScene || hook.visualConcept || ''
 
-                  <p className="text-xs text-stone-300 leading-relaxed">
-                    {hook.description}
-                  </p>
+                return (
+                  <div
+                    key={idx}
+                    className="bg-stone-950 border border-stone-800 rounded-xl p-4 space-y-2.5 hover:border-stone-700 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider">
+                        {hookTitle}
+                      </h3>
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded">
+                        {multiplier}
+                      </span>
+                    </div>
 
-                  <div className="bg-stone-900 p-2.5 rounded-lg border border-stone-800 text-[11px] text-stone-400">
-                    <span className="text-amber-500 font-bold block mb-0.5 text-[10px] uppercase">
-                      Voorbeeld Visuele Scene:
-                    </span>
-                    {hook.exampleScene}
+                    {desc && (
+                      <p className="text-xs text-stone-300 leading-relaxed">
+                        {desc}
+                      </p>
+                    )}
+
+                    {scene && (
+                      <div className="bg-stone-900 p-2.5 rounded-lg border border-stone-800 text-[11px] text-stone-400">
+                        <span className="text-amber-500 font-bold block mb-0.5 text-[10px] uppercase">
+                          Voorbeeld Visuele Scene:
+                        </span>
+                        {scene}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Fatigue Alerts */}
@@ -465,12 +521,18 @@ export default function AnalyticsPage() {
                 <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <span className="text-xs font-bold text-red-300 uppercase tracking-wider block">
-                    Content Fatigue & Afhaak-Signalen:
+                    Content Fatigue &amp; Afhaak-Signalen:
                   </span>
-                  <ul className="text-xs text-stone-400 space-y-1 list-disc list-inside">
-                    {report.contentFatigueAlerts.map((alert, i) => (
-                      <li key={i}>{alert}</li>
-                    ))}
+                  <ul className="text-xs text-stone-400 space-y-1.5 list-disc list-inside">
+                    {report.contentFatigueAlerts.map((rawAlert, i) => {
+                      const parsed = extractAlertItem(rawAlert)
+                      return (
+                        <li key={i} className="leading-relaxed">
+                          <strong className="text-stone-300">{parsed.title}</strong>
+                          {parsed.detail && <span className="block text-[11px] text-stone-500 pl-4">{parsed.detail}</span>}
+                        </li>
+                      )
+                    })}
                   </ul>
                 </div>
               </div>
@@ -493,7 +555,7 @@ export default function AnalyticsPage() {
                 </h2>
               </div>
               <span className="text-[11px] text-stone-400">
-                Gekoppeld aan streaming index & populariteitsscore
+                Gekoppeld aan streaming index &amp; populariteitsscore
               </span>
             </div>
 
@@ -663,24 +725,33 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {(report?.bestPostingWindows || []).map((win, idx) => (
-                <div key={idx} className="bg-stone-950 border border-stone-800 rounded-xl p-4 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-400 uppercase">
-                      {win.platform}
-                    </span>
-                    <span className="text-[10px] text-stone-400 font-semibold">
-                      {win.bestDay}
-                    </span>
+              {((report?.bestPostingWindows || []) as WindowDisplayItem[]).map((win, idx) => {
+                const platform = win.platform || 'Platform'
+                const bestDay = win.bestDay || 'Dagelijks'
+                const bestTime = win.bestTime || (Array.isArray(win.recommendedTimes) ? win.recommendedTimes.join(' / ') : '19:00 - 21:00 CET')
+                const reason = win.reason || win.rationale || ''
+
+                return (
+                  <div key={idx} className="bg-stone-950 border border-stone-800 rounded-xl p-4 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-400 uppercase">
+                        {platform}
+                      </span>
+                      <span className="text-[10px] text-stone-400 font-semibold">
+                        {bestDay}
+                      </span>
+                    </div>
+                    <p className="text-sm font-extrabold text-stone-100 font-mono">
+                      {bestTime}
+                    </p>
+                    {reason && (
+                      <p className="text-[11px] text-stone-400 pt-1">
+                        {reason}
+                      </p>
+                    )}
                   </div>
-                  <p className="text-sm font-extrabold text-stone-100 font-mono">
-                    {win.bestTime}
-                  </p>
-                  <p className="text-[11px] text-stone-400 pt-1">
-                    {win.reason}
-                  </p>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </section>
         </div>
