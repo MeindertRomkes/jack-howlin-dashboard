@@ -179,22 +179,45 @@ export default function CalendarGrid({
                                 {isVideo ? <Video className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
                                 <span>{isVideo ? 'Video gekoppeld' : 'Visual gekoppeld'}</span>
                               </span>
-                              <span className="text-[10px] text-stone-500 group-hover:text-amber-400 transition-colors">
-                                Details &rarr;
-                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onSelectPost?.(post)
+                                }}
+                                className="text-[10px] text-amber-500 hover:text-amber-300 font-bold transition-colors flex items-center gap-0.5"
+                              >
+                                <span>Details</span>
+                                <span>&rarr;</span>
+                              </button>
                             </div>
-                          ) : onGenerateVisual && post.id ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onGenerateVisual(post.id!)
-                              }}
-                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-amber-600/10 border border-amber-500/30 text-amber-400 hover:bg-amber-600/20 transition-colors mt-1.5 w-full"
-                            >
-                              <Clapperboard className="w-3.5 h-3.5" />
-                              Visual genereren
-                            </button>
-                          ) : null}
+                          ) : (
+                            <div className="flex items-center gap-1 mt-1.5">
+                              {onGenerateVisual && post.id && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    onGenerateVisual(post.id!)
+                                  }}
+                                  className="flex items-center justify-center gap-1 px-2 py-1 rounded text-[10px] bg-amber-600/10 border border-amber-500/30 text-amber-400 hover:bg-amber-600/20 transition-colors flex-1"
+                                >
+                                  <Clapperboard className="w-3 h-3" />
+                                  Visual genereren
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onSelectPost?.(post)
+                                }}
+                                className="text-[10px] text-stone-400 hover:text-stone-200 px-2 py-1 rounded bg-stone-900 border border-stone-800 transition-colors font-medium"
+                              >
+                                Details &rarr;
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )
                     })}

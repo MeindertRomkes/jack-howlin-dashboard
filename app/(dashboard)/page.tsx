@@ -226,15 +226,18 @@ export default function OverviewPage() {
                     : new Date(post.scheduledAt as string)
 
                 return (
-                  <div
+                  <Link
                     key={post.id}
-                    className="bg-stone-950 border border-stone-800 hover:border-stone-700 rounded-xl p-3 flex items-center justify-between gap-3 transition-all"
+                    href={`/calendar?postId=${post.id}`}
+                    className="bg-stone-950 border border-stone-800 hover:border-amber-500/60 hover:bg-stone-900/80 rounded-xl p-3 flex items-center justify-between gap-3 transition-all group block cursor-pointer"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-stone-200 text-xs font-bold truncate">
-                        {post.title || post.caption || 'Geen titel'}
-                      </p>
-                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <p className="text-stone-200 text-xs font-bold truncate group-hover:text-amber-400 transition-colors">
+                          {post.title || post.caption || 'Geen titel'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                         {post.platforms.map(p => {
                           const Icon = PLATFORM_ICONS[p]
                           const color = PLATFORM_COLORS[p]
@@ -248,18 +251,28 @@ export default function OverviewPage() {
                             </span>
                           )
                         })}
+                        {post.mediaUrl && (
+                          <span className="text-[9px] font-semibold text-amber-400/90 bg-amber-950/40 border border-amber-800/40 px-1.5 py-0.5 rounded">
+                            🎬 {post.mediaType === 'video' ? 'Video' : 'Visual'}
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <div className="text-right flex-shrink-0">
-                      <span className="text-[11px] text-amber-400 font-mono font-bold block">
-                        {date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
-                      </span>
-                      <span className="text-[10px] text-stone-500 font-mono">
-                        {date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                    <div className="text-right flex-shrink-0 flex items-center gap-2.5">
+                      <div>
+                        <span className="text-[11px] text-amber-400 font-mono font-bold block">
+                          {date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                        </span>
+                        <span className="text-[10px] text-stone-500 font-mono">
+                          {date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <span className="text-xs text-stone-600 group-hover:text-amber-400 transition-colors font-bold">
+                        &rarr;
                       </span>
                     </div>
-                  </div>
+                  </Link>
                 )
               })}
             </div>

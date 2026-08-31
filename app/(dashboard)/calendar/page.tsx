@@ -3,7 +3,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { getScheduledPosts } from '@/lib/firestore'
 import { db } from '@/lib/firebase'
-import { updateDoc, doc } from 'firebase/firestore'
+import { updateDoc, doc, getDoc } from 'firebase/firestore'
 import CalendarGrid from '@/components/calendar/CalendarGrid'
 import PostModal from '@/components/calendar/PostModal'
 import ReleaseCampaignModal from '@/components/calendar/ReleaseCampaignModal'
@@ -53,11 +53,20 @@ function CalendarPageInner() {
       setShowModal(true)
     }
     const postIdParam = searchParams.get('postId')
-    if (postIdParam && posts.length > 0) {
-      const found = posts.find(p => p.id === postIdParam)
-      if (found) {
-        setSelectedPost(found)
+    if (postIdParam) {
+      if (posts.length > 0) {
+        const found = posts.find(p => p.id === postIdParam)
+        if (found) {
+          setSelectedPost(found)
+          return
+        }
       }
+      // If not in state yet, fetch directly from Firestore
+      getDoc(doc(db, 'posts', postIdParam)).then(snap => {
+        if (snap.exists()) {
+          setSelectedPost({ id: snap.id, ...snap.data() } as Post)
+        }
+      }).catch(console.error)
     }
   }, [searchParams, posts])
 
@@ -81,6 +90,23 @@ function CalendarPageInner() {
 
   function handleSelectPost(post: Post) {
     setSelectedPost(post)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('postId', post.id || '')
+      window.history.replaceState({}, '', url.pathname + '?' + url.searchParams.toString())
+    }
+  }
+
+  function handleCloseSelectedPost() {
+    setSelectedPost(null)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      if (url.searchParams.has('postId')) {
+        url.searchParams.delete('postId')
+        const newSearch = url.searchParams.toString()
+        window.history.replaceState({}, '', url.pathname + (newSearch ? '?' + newSearch : ''))
+      }
+    }
   }
 
   return (
@@ -193,9 +219,9 @@ function CalendarPageInner() {
       {selectedPost && (
         <PostModal
           post={selectedPost}
-          onClose={() => setSelectedPost(null)}
+          onClose={handleCloseSelectedPost}
           onSaved={() => {
-            setSelectedPost(null)
+            handleCloseSelectedPost()
             loadPosts().catch(console.error)
           }}
         />
