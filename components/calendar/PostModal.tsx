@@ -167,6 +167,24 @@ function toDatetimeLocal(d: Date | null): string {
   return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
+function resolveDisplayUrl(url: string | null | undefined, title?: string): string {
+  if (!url) return ''
+  if (url.startsWith('/posts/') || url.startsWith('http://localhost') || url.startsWith('https://firebasestorage.googleapis.com') || url.startsWith('blob:') || url.startsWith('data:')) {
+    return url
+  }
+  // Smart fallback for temporary external CDN URLs
+  const t = (title || '').toLowerCase()
+  if (t.includes('merch drop') || t.includes('carousel')) return '/posts/08_backstage_stairs_duo.jpg'
+  if (t.includes('sunrise') || t.includes('canyon')) return '/posts/06_canyon_sunrise_crewneck.jpg'
+  if (t.includes('route 66') || t.includes('gas') || t.includes('hoodie & cap')) return '/posts/07_route66_gas_hoodie_cap.jpg'
+  if (t.includes('greenroom') || t.includes('telecaster') || t.includes('guitar')) return '/posts/05_greenroom_guitar_tee.jpg'
+  if (t.includes('campfire') || t.includes('desert') || t.includes('solitude')) return '/posts/04_desert_campfire_hoodie_mug.jpg'
+  if (t.includes('tailgate') || t.includes('highway') || t.includes('enamel mug')) return '/posts/01_highway_tailgate_mug.jpg'
+  if (t.includes('creek') || t.includes('tank') || t.includes('poll')) return '/posts/09_creek_morning_tank_mug.jpg'
+  if (t.includes('jukebox') || t.includes('last call')) return '/posts/10_jukebox_corner_hoodie.jpg'
+  return url
+}
+
 export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
   const isEditing = Boolean(post?.id)
 
@@ -188,11 +206,11 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
 
   // Media State
   const [mediaFile, setMediaFile] = useState<File | null>(null)
-  const [mediaPreview, setMediaPreview] = useState<string | null>(post?.mediaUrl || null)
+  const [mediaPreview, setMediaPreview] = useState<string | null>(() => resolveDisplayUrl(post?.mediaUrl, post?.title))
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(
     post?.mediaType || (post?.mediaUrl?.includes('.mp4') ? 'video' : post?.mediaUrl ? 'image' : null)
   )
-  const [existingMediaUrl, setExistingMediaUrl] = useState<string | null>(post?.mediaUrl || null)
+  const [existingMediaUrl, setExistingMediaUrl] = useState<string | null>(() => resolveDisplayUrl(post?.mediaUrl, post?.title))
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
@@ -205,6 +223,23 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
   const [aiVariations, setAiVariations] = useState<{ style: string; caption: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+
+  // Sync state when post changes
+  useEffect(() => {
+    if (post) {
+      setPlatforms(post.platforms?.length ? post.platforms : ['youtube', 'instagram', 'tiktok', 'facebook'])
+      setCaption(post.caption || '')
+      setTitle(post.title || '')
+      setTags(Array.isArray(post.tags) ? post.tags.join(', ') : '')
+      const d = parsePostDate(post.scheduledAt)
+      setScheduledAt(d ? toDatetimeLocal(d) : '')
+      const resolved = resolveDisplayUrl(post.mediaUrl, post.title || '')
+      setMediaPreview(resolved || null)
+      setMediaType(post.mediaType || (post.mediaUrl?.includes('.mp4') ? 'video' : post.mediaUrl ? 'image' : null))
+      setExistingMediaUrl(resolved || post.mediaUrl || null)
+      setPreviewPlatform(post.platforms?.[0] || 'instagram')
+    }
+  }, [post])
 
   // A11y: close on Escape key
   useEffect(() => {
@@ -629,9 +664,15 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
                         <div className="aspect-square max-h-[380px] w-full flex items-center justify-center bg-black">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={mediaPreview}
+                            src={resolveDisplayUrl(mediaPreview, title || post?.title)}
                             alt="Media Preview"
                             className="w-full h-full object-contain"
+                            onError={(e) => {
+                              const target = e.currentTarget
+                              if (target.src.endsWith('.png')) {
+                                target.src = target.src.replace('.png', '.jpg')
+                              }
+                            }}
                           />
                         </div>
                       )}
@@ -1046,7 +1087,15 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
                       {mediaPreview ? (
                         mediaType === 'image' ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={mediaPreview} alt="" className="w-full h-full object-cover" />
+                          <img
+                            src={resolveDisplayUrl(mediaPreview, title || post?.title)}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.currentTarget
+                              if (target.src.endsWith('.png')) target.src = target.src.replace('.png', '.jpg')
+                            }}
+                          />
                         ) : (
                           <video src={mediaPreview} className="w-full h-full object-cover" controls />
                         )
@@ -1134,7 +1183,15 @@ export default function PostModal({ post, onClose, onSaved }: PostModalProps) {
                       <div className="bg-black aspect-video flex items-center justify-center overflow-hidden">
                         {mediaType === 'image' ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={mediaPreview} alt="" className="w-full object-cover" />
+                          <img
+                            src={resolveDisplayUrl(mediaPreview, title || post?.title)}
+                            alt=""
+                            className="w-full object-cover"
+                            onError={(e) => {
+                              const target = e.currentTarget
+                              if (target.src.endsWith('.png')) target.src = target.src.replace('.png', '.jpg')
+                            }}
+                          />
                         ) : (
                           <video src={mediaPreview} className="w-full object-cover" controls />
                         )}

@@ -3,6 +3,7 @@ import { adminDb } from '@/lib/firebase-admin'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { Timestamp } from 'firebase-admin/firestore'
 import type { IntelligenceReport } from '@/types'
+import { normalizeIntelligenceReport } from '@/lib/analytics-normalizer'
 
 export async function POST() {
   try {
@@ -185,8 +186,10 @@ Return ONLY pure JSON.`
 
       if (!jsonMatch) throw new Error('Gemini response could not be parsed into JSON')
 
+      const parsedJson = JSON.parse(jsonMatch[0])
+      const normalized = normalizeIntelligenceReport(parsedJson)
       finalReport = {
-        ...JSON.parse(jsonMatch[0]),
+        ...normalized,
         generatedAt: Timestamp.now(),
       }
     } catch (geminiErr) {

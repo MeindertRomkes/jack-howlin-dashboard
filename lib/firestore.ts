@@ -14,7 +14,8 @@ import {
   Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { Comment, Post, VoiceHistory, SyncState, PersonaConfig, FanProfile, ConnectionHealth } from '@/types'
+import type { Comment, Post, VoiceHistory, SyncState, PersonaConfig, FanProfile, ConnectionHealth, AnalyticsSnapshot, IntelligenceReport } from '@/types'
+import { normalizeIntelligenceReport } from './analytics-normalizer'
 
 export async function getNewComments(limitCount = 50): Promise<Comment[]> {
   const q = query(
@@ -259,7 +260,7 @@ export async function getLatestIntelligenceReport(): Promise<IntelligenceReport 
   try {
     const snap = await getDoc(doc(db, 'system', 'intelligence_report'))
     if (snap.exists()) {
-      return { id: snap.id, ...snap.data() } as IntelligenceReport
+      return normalizeIntelligenceReport({ id: snap.id, ...snap.data() })
     }
   } catch (err) {
     console.error('Error fetching intelligence report:', err)

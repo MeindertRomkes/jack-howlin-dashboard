@@ -14,8 +14,15 @@ export async function signInWithGoogle(): Promise<void> {
   })
 
   if (!res.ok) {
-    const { error } = await res.json()
-    throw new Error(error || 'Failed to create session')
+    let errorMsg = 'Failed to create session'
+    try {
+      const data = await res.json()
+      errorMsg = data.error || errorMsg
+    } catch {
+      const text = await res.text().catch(() => '')
+      errorMsg = `Server error (${res.status}): ${text.slice(0, 150)}`
+    }
+    throw new Error(errorMsg)
   }
 
   // Redirect to dashboard (root) after successful login

@@ -3,7 +3,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { getScheduledPosts } from '@/lib/firestore'
 import { db } from '@/lib/firebase'
-import { updateDoc, doc, getDoc } from 'firebase/firestore'
+import { updateDoc, doc, getDoc, collection, onSnapshot } from 'firebase/firestore'
 import CalendarGrid from '@/components/calendar/CalendarGrid'
 import PostModal from '@/components/calendar/PostModal'
 import ReleaseCampaignModal from '@/components/calendar/ReleaseCampaignModal'
@@ -41,7 +41,16 @@ function CalendarPageInner() {
   }
 
   useEffect(() => {
-    loadPosts().catch(console.error)
+    setLoading(true)
+    const unsub = onSnapshot(collection(db, 'posts'), (snap) => {
+      const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() } as Post))
+      setPosts(loaded)
+      setLoading(false)
+    }, (err) => {
+      console.warn('Firestore realtime error, fallback to static fetch:', err)
+      loadPosts().catch(console.error)
+    })
+    return () => unsub()
   }, [])
 
   // Open modals or select post via query params
@@ -218,6 +227,7 @@ function CalendarPageInner() {
       {/* Existing Post Edit/View Modal */}
       {selectedPost && (
         <PostModal
+          key={selectedPost.id || 'selected-post'}
           post={selectedPost}
           onClose={handleCloseSelectedPost}
           onSaved={() => {

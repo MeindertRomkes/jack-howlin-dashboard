@@ -14,6 +14,7 @@ De skill bewaakt 100% gezichts- en kledingconsistentie via de **Jack Core Set**,
 
 ## 🧭 Wanneer te gebruiken
 * De gebruiker wil een post, video, reel of TikTok maken voor Jack Howlin (*"Ik wil iets op socials plaatsen"* of *"Maak een nieuwe video voor socials"*).
+* **BELANGRIJKE VASTE REGEL:** Als de gebruiker het over posten of inplannen heeft, **ALTIJD direct het Jack Howlin Dashboard (`/calendar`, Firestore `posts` collectie)** gebruiken als centrale commandocentrale en opslag.
 * Brainstormen over concepten, stijlkeuzes, audiofragmenten en captions.
 * Produceren van video's met vocale lip-sync OF stoïcijnse sfeerbeelden (niet-zingend).
 * Genereren van single posts of wekelijkse 3-tot-5 post campagnepakketten.
@@ -72,10 +73,13 @@ De skill bewaakt 100% gezichts- en kledingconsistentie via de **Jack Core Set**,
 
 ---
 
-## 🎨 2. Jack Core Set Referentie Binding
+## 🎨 2. Jack Howlin Multi-Level Master Referentie Binding
 
 > [!IMPORTANT]
-> Genereer Jack Howlin **NOOIT** blind via text-to-image. Gebruik altijd de officiële **Jack Core Set** beelden als image reference URLs (`projects/hate-me-seedance-30s/stills/jack-howlin-master-still.png` of de Cloud Storage URLs).
+> **STRIKTE REGEL VOOR ALLE PRODUCTIES:** Gebruik **NOOIT** meer de oude losse multi-image core set (omdat 20 losse afbeeldingen honderden onnodige credits kosten en inconsistentie veroorzaken). 
+> Gebruik **ALTIJD** de officiële **Multi-Level Master Referentie**:
+> * **Lokaal pad:** `projects/jack-core-set/jack_howlin_multilevel_reference.jpg`
+> * **Cloud URL:** `https://firebasestorage.googleapis.com/v0/b/jack-howlin-dashboard.firebasestorage.app/o/jack-core-references%2Fjack_howlin_multilevel_reference.jpg?alt=media&token=f1a7ae6e-507d-41b6-97db-71305e38484a`
 
 ### Vaste Wardrobe Anchors in Prompts:
 * `wearing a tan camel-brown heavy canvas work jacket with dual front chest flap pockets`
@@ -84,7 +88,23 @@ De skill bewaakt 100% gezichts- en kledingconsistentie via de **Jack Core Set**,
 
 ---
 
-## ⚡ 3. Uitvoering via Kie.ai (MCP & CLI)
+## 👥 3. Cinematic Universe Personages (11 Karakters)
+Raadpleeg voor alle personages, scènes en interacties `references/character-bible.md` (en `docs/universe/character-bible.md`):
+* **Jack Howlin'** (Hoofdpersoon — Ernstig, kaak klem onder spanning)
+* **Rosie Ray** (Warmte & gelijke — Donkerrood overshirt, sproeten, kalme directe blik)
+* **Sheriff Silas Crowe** (Beheerste dreiging — Doffe badge, koud glimlachje)
+* **Mae Bell Carter** (Praktische daadkracht — Denim overall, litteken wenkbrauw)
+* **June Holloway** (De stille waarnemer — Petrolblauw, motel sleutel)
+* **Cole Ransom** (Ontworpen rebellie — Zwart suède met borduursel, gepolijst zilver)
+* **Hank "Blacktop" Mercer** (Betrouwbare zwaarte — Groen vest, rode flannel, trucksleutel)
+* **Lila Quinn** (Intimiteit op afstand — Koperlok in zwart haar, radio microfoon)
+* **Gideon Pike** (Absolute controle — Geschoren hoofd, littekens, kompas)
+* **Ruby Cade** (Vuur met discipline — Bordeauxrood leer, koperrood haar)
+* **Abel Graves** (Onnatuurlijke stilte — Grijze jas, blauwe sjaal, zakhorloge)
+
+---
+
+## ⚡ 4. Uitvoering via Kie.ai (MCP & CLI)
 
 ### A. Foto Generatie (ByteDance Seedream 5 Pro)
 ```bash

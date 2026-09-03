@@ -6,6 +6,14 @@ import {
 } from '@/lib/firestore'
 import type { AnalyticsSnapshot, IntelligenceReport, TrackPerformance } from '@/types'
 import {
+  extractSummaryText,
+  extractAlertItem,
+  extractWinningHooks,
+  extractPostingWindows,
+  extractPlaybooks,
+  normalizeIntelligenceReport,
+} from '@/lib/analytics-normalizer'
+import {
   BarChart3,
   TrendingUp,
   RefreshCw,
@@ -67,62 +75,6 @@ const DEFAULT_TOP_TRACKS: TrackPerformance[] = [
   },
 ]
 
-interface PlaybookDisplayItem {
-  id?: string
-  title?: string
-  playbookName?: string
-  reason?: string
-  objective?: string
-  steps?: string[]
-  type?: string
-  actionPayload?: { caption?: string; suggestedFormat?: string }
-}
-
-interface HookDisplayItem {
-  hookTitle?: string
-  trackTitle?: string
-  visualConcept?: string
-  effectivenessMultiplier?: string
-  performanceMetric?: string
-  description?: string
-  whyItWorks?: string
-  exampleScene?: string
-}
-
-interface WindowDisplayItem {
-  platform?: string
-  bestDay?: string
-  bestTime?: string
-  recommendedTimes?: string[]
-  reason?: string
-  rationale?: string
-}
-
-// ── Defensive helper functions to prevent any React child object crashes ──
-
-function extractSummaryText(summary: unknown): string {
-  if (!summary) return ''
-  if (typeof summary === 'string') return summary
-  if (typeof summary === 'object' && summary !== null) {
-    const s = summary as Record<string, unknown>
-    if (typeof s.strategicTakeaway === 'string') return s.strategicTakeaway
-    if (typeof s.headline === 'string') return s.headline
-    if (typeof s.summary === 'string') return s.summary
-  }
-  return String(summary)
-}
-
-function extractAlertItem(alert: unknown): { title: string; detail?: string } {
-  if (typeof alert === 'string') return { title: alert }
-  if (typeof alert === 'object' && alert !== null) {
-    const a = alert as Record<string, unknown>
-    const title = [a.category, a.issue].filter(Boolean).join(' — ') || (typeof a.alert === 'string' ? a.alert : 'Signaal')
-    const detail = [a.dataPoint, a.risk, a.remedy].filter(Boolean).join(' • ')
-    return { title, detail: detail || undefined }
-  }
-  return { title: String(alert) }
-}
-
 export default function AnalyticsPage() {
   const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null)
   const [report, setReport] = useState<IntelligenceReport | null>(null)
@@ -138,7 +90,7 @@ export default function AnalyticsPage() {
         getLatestIntelligenceReport(),
       ])
       if (snapData) setSnapshot(snapData)
-      if (repData) setReport(repData)
+      if (repData) setReport(normalizeIntelligenceReport(repData))
     } catch (err) {
       console.error('Error loading analytics data:', err)
     } finally {
@@ -186,6 +138,14 @@ export default function AnalyticsPage() {
   const avgRetention = snapshot?.youtube?.avgWatchPercentage || 71.4
 
   const summaryText = extractSummaryText(report?.summary)
+  const playbooks = extractPlaybooks(report?.actionablePlaybooks)
+  const winningHooks = extractWinningHooks(report?.winningHooks)
+  const postingWindows = extractPostingWindows(report?.bestPostingWindows)
+  const fatigueAlerts = Array.isArray(report?.contentFatigueAlerts)
+    ? report.contentFatigueAlerts.map(extractAlertItem)
+    : report?.contentFatigueAlerts && typeof report.contentFatigueAlerts === 'object'
+    ? Object.values(report.contentFatigueAlerts).map(extractAlertItem)
+    : []
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-16">
@@ -407,10 +367,10 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {((report?.actionablePlaybooks || []) as PlaybookDisplayItem[]).map((playbook, idx) => {
-                const title = playbook.title || playbook.playbookName || `Aanbevolen Actie #${idx + 1}`
-                const reason = playbook.reason || playbook.objective || (Array.isArray(playbook.steps) ? playbook.steps.join(' ') : '')
-                const caption = playbook.actionPayload?.caption || (Array.isArray(playbook.steps) ? playbook.steps[0] : '')
+              {playbooks.map((playbook, idx) => {
+                const title = playbook.title || `Aanbevolen Actie #${idx + 1}`
+                const reason = playbook.reason || ''
+                const caption = playbook.actionPayload?.caption || ''
 
                 return (
                   <div
@@ -476,11 +436,11 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {((report?.winningHooks || []) as HookDisplayItem[]).map((hook, idx) => {
-                const hookTitle = hook.hookTitle || hook.trackTitle || hook.visualConcept || `Hook #${idx + 1}`
-                const multiplier = hook.effectivenessMultiplier || hook.performanceMetric || 'Top Score'
-                const desc = hook.description || hook.whyItWorks || ''
-                const scene = hook.exampleScene || hook.visualConcept || ''
+              {winningHooks.map((hook, idx) => {
+                const hookTitle = hook.hookTitle || `Hook #${idx + 1}`
+                const multiplier = hook.effectivenessMultiplier || 'Top Score'
+                const desc = hook.description || ''
+                const scene = hook.exampleScene || ''
 
                 return (
                   <div
@@ -516,7 +476,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Fatigue Alerts */}
-            {report?.contentFatigueAlerts && report.contentFatigueAlerts.length > 0 && (
+            {fatigueAlerts.length > 0 && (
               <div className="p-4 bg-red-950/20 border border-red-900/50 rounded-xl flex items-start gap-3 mt-4">
                 <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
                 <div className="space-y-1">
@@ -524,15 +484,12 @@ export default function AnalyticsPage() {
                     Content Fatigue &amp; Afhaak-Signalen:
                   </span>
                   <ul className="text-xs text-stone-400 space-y-1.5 list-disc list-inside">
-                    {report.contentFatigueAlerts.map((rawAlert, i) => {
-                      const parsed = extractAlertItem(rawAlert)
-                      return (
-                        <li key={i} className="leading-relaxed">
-                          <strong className="text-stone-300">{parsed.title}</strong>
-                          {parsed.detail && <span className="block text-[11px] text-stone-500 pl-4">{parsed.detail}</span>}
-                        </li>
-                      )
-                    })}
+                    {fatigueAlerts.map((parsed, i) => (
+                      <li key={i} className="leading-relaxed">
+                        <strong className="text-stone-300">{parsed.title}</strong>
+                        {parsed.detail && <span className="block text-[11px] text-stone-500 pl-4">{parsed.detail}</span>}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </div>
@@ -725,11 +682,11 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {((report?.bestPostingWindows || []) as WindowDisplayItem[]).map((win, idx) => {
+              {postingWindows.map((win, idx) => {
                 const platform = win.platform || 'Platform'
                 const bestDay = win.bestDay || 'Dagelijks'
-                const bestTime = win.bestTime || (Array.isArray(win.recommendedTimes) ? win.recommendedTimes.join(' / ') : '19:00 - 21:00 CET')
-                const reason = win.reason || win.rationale || ''
+                const bestTime = win.bestTime || '19:00 - 21:00 CET'
+                const reason = win.reason || ''
 
                 return (
                   <div key={idx} className="bg-stone-950 border border-stone-800 rounded-xl p-4 space-y-1.5">

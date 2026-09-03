@@ -237,16 +237,21 @@ function TrackCard({
         </button>
 
         {/* Track Title and Year */}
+        {/* Track Title and Year / Duration */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className={`text-sm truncate font-medium ${isFullPlaying ? 'text-amber-400 font-semibold' : 'text-stone-200'}`}>
               {track.name}
             </span>
-            {releaseYear && (
+            {track.durationSeconds ? (
+              <span className="text-[11px] text-stone-500 font-mono flex-shrink-0">
+                {Math.floor(track.durationSeconds / 60)}:{Math.floor(track.durationSeconds % 60).toString().padStart(2, '0')}
+              </span>
+            ) : releaseYear ? (
               <span className="text-[11px] text-stone-500 font-mono flex-shrink-0">
                 {releaseYear}
               </span>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -889,29 +894,45 @@ export default function SunoLibraryManager() {
             <p className="text-[11px] font-bold text-stone-500 uppercase tracking-widest flex items-center gap-1.5">
               <Disc3 className="w-3.5 h-3.5" /> Albums ({albumGroups.length})
             </p>
-            {albumGroups.map((album) => (
-              <div key={album.name} className="border border-stone-800 rounded-xl overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => toggleAlbum(album.name)}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-stone-900/80 hover:bg-stone-900 transition-colors text-left"
-                >
-                  <div className="w-8 h-8 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-                    <Disc3 className="w-4 h-4 text-amber-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-bold text-stone-200 block truncate">{album.name}</span>
-                    <span className="text-[11px] text-stone-500">{album.tracks.length} tracks</span>
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-500 bg-emerald-950/40 border border-emerald-800/50 px-2 py-0.5 rounded-full mr-2">
-                    ALBUM
-                  </span>
-                  {expandedAlbums.has(album.name) ? (
-                    <ChevronDown className="w-4 h-4 text-stone-500 flex-shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-stone-500 flex-shrink-0" />
-                  )}
-                </button>
+            {albumGroups.map((album) => {
+              const coverUrl = album.tracks.find((t) => t.albumCoverUrl)?.albumCoverUrl
+              const albumYear = album.tracks.find((t) => t.releaseYear)?.releaseYear
+              return (
+                <div key={album.name} className="border border-stone-800 rounded-xl overflow-hidden shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => toggleAlbum(album.name)}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-stone-900/80 hover:bg-stone-900 transition-colors text-left"
+                  >
+                    {coverUrl ? (
+                      <img
+                        src={coverUrl}
+                        alt={album.name}
+                        className="w-9 h-9 rounded-md object-cover border border-amber-500/30 shadow-sm flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
+                        <Disc3 className="w-4 h-4 text-amber-500" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-stone-200 block truncate">{album.name}</span>
+                        {albumYear && (
+                          <span className="text-[11px] text-stone-500 font-mono">({albumYear})</span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-stone-500">{album.tracks.length} tracks • Volledig album</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-500 bg-emerald-950/40 border border-emerald-800/50 px-2 py-0.5 rounded-full mr-2">
+                      ALBUM
+                    </span>
+                    {expandedAlbums.has(album.name) ? (
+                      <ChevronDown className="w-4 h-4 text-stone-500 flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-stone-500 flex-shrink-0" />
+                    )}
+                  </button>
                 {expandedAlbums.has(album.name) && (
                   <div className="p-2 bg-stone-950/40 space-y-2 border-t border-stone-800/80">
                     {album.tracks.map((track) => (
@@ -938,7 +959,8 @@ export default function SunoLibraryManager() {
                   </div>
                 )}
               </div>
-            ))}
+            )
+          })}
           </div>
         )}
 

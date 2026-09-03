@@ -61,14 +61,14 @@ const mockSnapshot = {
 }
 
 vi.mock('@/lib/firestore', () => ({
-  getLatestAnalyticsSnapshot: async () => mockSnapshot,
-  getLatestIntelligenceReport: async () => ({
+  getLatestAnalyticsSnapshot: vi.fn(async () => mockSnapshot),
+  getLatestIntelligenceReport: vi.fn(async () => ({
     id: 'report_1',
     summary: 'Strong growth in shortform videos across Instagram & TikTok.',
     winningHooks: [],
     actionablePlaybooks: [],
     bestPostingWindows: [],
-  }),
+  })),
 }))
 
 describe('AnalyticsPage Component', () => {
@@ -106,6 +106,80 @@ describe('AnalyticsPage Component', () => {
       'href',
       '/studio?trackTitle=Dust%20%26%20Diesel'
     )
+  })
+
+  test('handles complex object-based intelligence reports without crashing', async () => {
+    const { getLatestIntelligenceReport } = await import('@/lib/firestore')
+    vi.mocked(getLatestIntelligenceReport).mockResolvedValueOnce({
+      id: 'report_complex',
+      generatedAt: new Date(),
+      summary: {
+        executiveBrief: 'Cross-platform growth surging on TikTok and Spotify.',
+        keyTakeaway: 'Focus on shortform video hooks.',
+      } as any,
+      winningHooks: [
+        {
+          trackTitle: 'I Still Wear This Crown',
+          hookType: 'Silhouette Reveal',
+          description: 'Dusty hat with acoustic chords',
+          performanceImpact: '3.5x shares',
+          strategicValue: 'Deep outlaw branding',
+        } as any,
+      ],
+      actionablePlaybooks: {
+        shortFormVideo: {
+          objective: 'Capitalize on TikTok engagement',
+          tactics: ['Post 3-part series on Instagram', 'Use acoustic intro hook'],
+        },
+        spotifyConversion: {
+          objective: 'Drive listener conversion',
+          tactics: ['Add Spotify smart link in bio'],
+        },
+      } as any,
+      bestPostingWindows: [
+        {
+          platform: 'TikTok',
+          optimalDays: ['Thursday', 'Friday'],
+          peakHoursCST: ['19:00 - 21:00'],
+          audienceContext: 'Late-night driving listeners',
+        } as any,
+      ],
+      contentFatigueAlerts: [
+        {
+          riskArea: 'Over-reliance on highway footage',
+          observation: 'Repeated highway visuals risk viewer saturation',
+          mitigationStrategy: 'Rotate with bar and studio scenes',
+          severity: 'Medium',
+        } as any,
+      ],
+      trackMomentumRadar: [],
+    })
+
+    render(<AnalyticsPage />)
+
+    // Summary text from object should be extracted and rendered
+    expect(
+      await screen.findByText(/Cross-platform growth surging on TikTok and Spotify/i)
+    ).toBeInTheDocument()
+
+    // Playbooks rendered from object keys
+    expect(screen.getByText(/Short Form Video/i)).toBeInTheDocument()
+    expect(screen.getByText(/Spotify Conversion/i)).toBeInTheDocument()
+
+    // Switch to Winning Hooks tab
+    const hooksTab = screen.getByText(/Winning Hooks & Formats/i)
+    fireEvent.click(hooksTab)
+
+    expect(await screen.findByText(/I Still Wear This Crown — Silhouette Reveal/i)).toBeInTheDocument()
+    expect(screen.getByText(/3.5x shares/i)).toBeInTheDocument()
+    expect(screen.getByText(/Over-reliance on highway footage/i)).toBeInTheDocument()
+
+    // Switch to Platforms tab
+    const platformsTab = screen.getByText(/Platform Breakdown & Timing/i)
+    fireEvent.click(platformsTab)
+
+    expect(await screen.findByText(/Thursday & Friday/i)).toBeInTheDocument()
+    expect(screen.getByText(/19:00 - 21:00/i)).toBeInTheDocument()
   })
 })
 

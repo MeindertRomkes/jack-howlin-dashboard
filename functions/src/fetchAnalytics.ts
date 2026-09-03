@@ -118,9 +118,57 @@ export async function aggregateAndStoreAnalytics(): Promise<void> {
       const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
 
       const prompt = `You are the Lead Intelligence Strategist for Jack Howlin', a modern Outlaw Americana music artist.
-Analyze this snapshot: ${JSON.stringify(snapshot)}
-Produce a structured JSON report with summary, winningHooks, contentFatigueAlerts, bestPostingWindows, trackMomentumRadar, and actionablePlaybooks.
-Return pure JSON.`
+Jack's Brand: The outlaw who refuses to bow. Weathered, cinematic, authentic, confident, never apologetic.
+
+Analyze this platform performance snapshot data:
+${JSON.stringify(snapshot, null, 2)}
+
+Produce a deep, actionable Data Intelligence Report in valid JSON matching this exact structure:
+{
+  "summary": "1-2 concise sentences summarizing performance trends and top momentum",
+  "winningHooks": [
+    {
+      "hookTitle": "Short name of winning hook",
+      "description": "Why this video hook works",
+      "effectivenessMultiplier": "e.g. 3.2x retention",
+      "exampleScene": "Visual scene description in Jack Howlin' world"
+    }
+  ],
+  "contentFatigueAlerts": ["Things that underperformed or formats losing viewer attention"],
+  "bestPostingWindows": [
+    {
+      "platform": "youtube",
+      "bestDay": "Day",
+      "bestTime": "Time range",
+      "reason": "Why"
+    }
+  ],
+  "trackMomentumRadar": [
+    {
+      "trackTitle": "Song name",
+      "momentumStatus": "surging",
+      "growthNote": "What data shows",
+      "actionRecommendation": "Next action to take"
+    }
+  ],
+  "actionablePlaybooks": [
+    {
+      "id": "playbook-1",
+      "type": "song_release",
+      "title": "Action title",
+      "targetTrack": "Track name",
+      "reason": "Data backing this action",
+      "recommendedHook": "Specific hook to use",
+      "suggestedPlatforms": ["youtube", "instagram", "tiktok"],
+      "priority": "high",
+      "actionPayload": {
+        "caption": "Short on-brand caption in Jack's voice",
+        "suggestedFormat": "Visual format"
+      }
+    }
+  ]
+}
+Return ONLY pure JSON.`
 
       const res = await model.generateContent(prompt)
       const text = res.response.text().trim()
